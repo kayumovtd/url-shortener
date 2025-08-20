@@ -7,23 +7,16 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+
+	"github.com/kayumovtd/url-shortener/internal/repository"
 	"github.com/kayumovtd/url-shortener/internal/utils"
 )
 
-var (
-	store = make(map[string]string)
-	mu    sync.RWMutex
-)
-
-func PostHandler(store map[string]string) http.HandlerFunc {
+func PostHandler(store repository.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -37,12 +30,14 @@ func PostHandler(store map[string]string) http.HandlerFunc {
 			return
 		}
 		originalURL = u.String()
+
 		shortID := utils.GenerateID(originalURL)
 		shortURL := fmt.Sprintf("http://%s/%s", r.Host, shortID)
 
-		mu.Lock()
-		store[shortID] = originalURL
-		mu.Unlock()
+		if err := store.Set(shortID, originalURL); err != nil {
+			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
 
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusCreated)
@@ -50,23 +45,15 @@ func PostHandler(store map[string]string) http.HandlerFunc {
 	}
 }
 
-func GetHandler(store map[string]string) http.HandlerFunc {
+func GetHandler(store repository.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
-			return
-		}
-
-		id := r.PathValue("id")
+		id := chi.URLParam(r, "id")
 		if id == "" {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
-		mu.RLock()
-		origURL, ok := store[id]
-		mu.RUnlock()
-
+		origURL, ok := store.Get(id)
 		if !ok {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
@@ -76,9 +63,17 @@ func GetHandler(store map[string]string) http.HandlerFunc {
 	}
 }
 
-func main() {
-	http.HandleFunc("/", PostHandler(store))
-	http.HandleFunc("/{id}", GetHandler(store))
+func mainRouter(store repository.Store) chi.Router {
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
 
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	r.Post("/", PostHandler(store))
+	r.Get("/{id}", GetHandler(store))
+
+	return r
+}
+
+func main() {
+	store := repository.NewInMemoryStore()
+	log.Fatal(http.ListenAndServe(":8080", mainRouter(store)))
 }

@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/kayumovtd/url-shortener/internal/repository"
 )
 
 func TestPostHandler(t *testing.T) {
@@ -50,7 +54,7 @@ func TestPostHandler(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		store := map[string]string{}
+		store := repository.NewInMemoryStore()
 		handler := PostHandler(store)
 
 		t.Run(tt.name, func(t *testing.T) {
@@ -88,56 +92,63 @@ func TestGetHandler(t *testing.T) {
 	}
 
 	tests := []struct {
-		name  string
-		id    string
-		store map[string]string
-		want  want
+		name         string
+		id           string
+		prepareStore func(store repository.Store)
+		want         want
 	}{
 		{
-			name:  "existing_id",
-			id:    "abc123",
-			store: map[string]string{"abc123": "https://example.com"},
+			name: "existing_id",
+			id:   "abc123",
+			prepareStore: func(store repository.Store) {
+				store.Set("abc123", "https://example.com")
+			},
 			want: want{
 				statusCode: http.StatusTemporaryRedirect,
 				location:   "https://example.com",
-				body:       "",
 			},
 		},
 		{
-			name:  "non-existing_id",
-			id:    "xyz999",
-			store: map[string]string{},
+			name: "non_existing_id",
+			id:   "xyz999",
 			want: want{
 				statusCode: http.StatusBadRequest,
-				location:   "",
 				body:       http.StatusText(http.StatusBadRequest),
 			},
 		},
 		{
-			name:  "empty_id",
-			id:    "",
-			store: map[string]string{},
+			name: "empty_id",
+			id:   "",
 			want: want{
 				statusCode: http.StatusBadRequest,
-				location:   "",
 				body:       http.StatusText(http.StatusBadRequest),
 			},
 		},
 	}
 
 	for _, tt := range tests {
-		handler := GetHandler(tt.store)
+		store := repository.NewInMemoryStore()
+		if tt.prepareStore != nil {
+			tt.prepareStore(store)
+		}
+
+		handler := GetHandler(store)
 
 		t.Run(tt.name, func(t *testing.T) {
 			url := "/" + tt.id
 			req := httptest.NewRequest(http.MethodGet, url, nil)
-			req.SetPathValue("id", tt.id)
 			w := httptest.NewRecorder()
+
+			// в хендлере получаем параметр через chi, в тесте задать нужно через RouteContext
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", tt.id)
+			req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 
 			handler(w, req)
 
 			res := w.Result()
 			defer res.Body.Close()
+
 			bodyBytes, _ := io.ReadAll(res.Body)
 			body := string(bodyBytes)
 
@@ -153,7 +164,7 @@ func TestGetHandler(t *testing.T) {
 			}
 
 			if tt.want.body != "" && !strings.Contains(body, tt.want.body) {
-				t.Errorf("body = %q, does not contain %q", body, tt.want.body)
+				t.Errorf("body = %q, want %q", body, tt.want.body)
 			}
 		})
 	}
