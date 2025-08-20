@@ -11,11 +11,12 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/kayumovtd/url-shortener/internal/config"
 	"github.com/kayumovtd/url-shortener/internal/repository"
 	"github.com/kayumovtd/url-shortener/internal/utils"
 )
 
-func PostHandler(store repository.Store) http.HandlerFunc {
+func PostHandler(store repository.Store, baseURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -32,7 +33,7 @@ func PostHandler(store repository.Store) http.HandlerFunc {
 		originalURL = u.String()
 
 		shortID := utils.GenerateID(originalURL)
-		shortURL := fmt.Sprintf("http://%s/%s", r.Host, shortID)
+		shortURL := fmt.Sprintf("%s/%s", baseURL, shortID)
 
 		if err := store.Set(shortID, originalURL); err != nil {
 			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -63,17 +64,19 @@ func GetHandler(store repository.Store) http.HandlerFunc {
 	}
 }
 
-func mainRouter(store repository.Store) chi.Router {
+func mainRouter(store repository.Store, baseURL string) chi.Router {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	r.Post("/", PostHandler(store))
+	r.Post("/", PostHandler(store, baseURL))
 	r.Get("/{id}", GetHandler(store))
 
 	return r
 }
 
 func main() {
+	cfg := config.NewConfig()
+
 	store := repository.NewInMemoryStore()
-	log.Fatal(http.ListenAndServe(":8080", mainRouter(store)))
+	log.Fatal(http.ListenAndServe(cfg.Address, mainRouter(store, cfg.BaseURL)))
 }

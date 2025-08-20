@@ -12,6 +12,8 @@ import (
 	"github.com/kayumovtd/url-shortener/internal/repository"
 )
 
+const testBaseURL = "http://fooBar:8080"
+
 func TestPostHandler(t *testing.T) {
 	type want struct {
 		statusCode  int
@@ -30,7 +32,7 @@ func TestPostHandler(t *testing.T) {
 			want: want{
 				statusCode:  http.StatusCreated,
 				contentType: "text/plain",
-				body:        "http://", // проверка, что ответ содержит какой-то урл
+				body:        testBaseURL, // проверка, что ответ содержит какой-то урл
 			},
 		},
 		{
@@ -55,7 +57,7 @@ func TestPostHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		store := repository.NewInMemoryStore()
-		handler := PostHandler(store)
+		handler := PostHandler(store, testBaseURL)
 
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
