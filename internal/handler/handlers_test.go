@@ -1,4 +1,4 @@
-package main
+package handler
 
 import (
 	"context"
@@ -71,7 +71,7 @@ func TestPostHandler(t *testing.T) {
 			body := string(bodyBytes)
 
 			if res.StatusCode != tt.want.statusCode {
-				t.Errorf("status code = %d, want %d", res.StatusCode, tt.want.statusCode)
+				t.Fatalf("status code = %d, want %d", res.StatusCode, tt.want.statusCode)
 			}
 
 			gotCT := res.Header.Get("Content-Type")
@@ -155,7 +155,7 @@ func TestGetHandler(t *testing.T) {
 			body := string(bodyBytes)
 
 			if res.StatusCode != tt.want.statusCode {
-				t.Errorf("status code = %d, want %d", res.StatusCode, tt.want.statusCode)
+				t.Fatalf("status code = %d, want %d", res.StatusCode, tt.want.statusCode)
 			}
 
 			if tt.want.location != "" {
