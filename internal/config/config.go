@@ -12,6 +12,7 @@ const (
 	envBaseURL     = "BASE_URL"
 )
 
+// Config содержит параметры запуска приложения.
 type Config struct {
 	Address string
 	BaseURL string
