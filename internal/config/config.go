@@ -6,16 +6,17 @@ import (
 )
 
 const (
-	defaultAddress = ":8080"
-	defaultBaseURL = "http://localhost:8080"
-	envServerAddr  = "SERVER_ADDRESS"
-	envBaseURL     = "BASE_URL"
+	defaultAddress  = ":8080"
+	defaultBaseURL  = "http://localhost:8080"
+	defaultLogLevel = "info"
+	envServerAddr   = "SERVER_ADDRESS"
+	envBaseURL      = "BASE_URL"
 )
 
-// Config содержит параметры запуска приложения.
 type Config struct {
-	Address string
-	BaseURL string
+	Address  string
+	BaseURL  string
+	LogLevel string
 }
 
 func NewConfig() *Config {
@@ -23,6 +24,7 @@ func NewConfig() *Config {
 
 	flag.StringVar(&cfg.Address, "a", defaultAddress, "HTTP server listen address")
 	flag.StringVar(&cfg.BaseURL, "b", defaultBaseURL, "Base URL for shortened URLs")
+	flag.StringVar(&cfg.LogLevel, "l", defaultLogLevel, "Level for logs")
 	flag.Parse()
 
 	if addr := os.Getenv(envServerAddr); addr != "" {
