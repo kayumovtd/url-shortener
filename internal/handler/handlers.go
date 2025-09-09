@@ -1,21 +1,15 @@
 package handler
 
 import (
-	"fmt"
 	"io"
 	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"go.uber.org/zap"
 
-	"github.com/kayumovtd/url-shortener/internal/logger"
-	"github.com/kayumovtd/url-shortener/internal/repository"
-	"github.com/kayumovtd/url-shortener/internal/utils"
+	"github.com/kayumovtd/url-shortener/internal/service"
 )
 
-func PostHandler(store repository.Store, baseURL string) http.HandlerFunc {
+func PostHandler(svc *service.ShortenerService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil || len(body) == 0 {
@@ -23,24 +17,9 @@ func PostHandler(store repository.Store, baseURL string) http.HandlerFunc {
 			return
 		}
 
-		originalURL := strings.TrimSpace(string(body))
-		u, err := url.ParseRequestURI(originalURL)
+		shortURL, err := svc.Shorten(string(body))
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			return
-		}
-		originalURL = u.String()
-
-		shortID := utils.GenerateID(originalURL)
-		shortURL := fmt.Sprintf("%s/%s", baseURL, shortID)
-
-		if err := store.Set(shortID, originalURL); err != nil {
-			logger.Log.Error("failed to save URL",
-				zap.String("id", shortID),
-				zap.String("url", originalURL),
-				zap.Error(err),
-			)
-			http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 
@@ -50,20 +29,14 @@ func PostHandler(store repository.Store, baseURL string) http.HandlerFunc {
 	}
 }
 
-func GetHandler(store repository.Store) http.HandlerFunc {
+func GetHandler(svc *service.ShortenerService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		if id == "" {
-			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
-			return
-		}
-
-		origURL, err := store.Get(id)
+		origURL, err := svc.Unshorten(id)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
-
 		http.Redirect(w, r, origURL, http.StatusTemporaryRedirect)
 	}
 }
