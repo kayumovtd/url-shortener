@@ -5,10 +5,6 @@ import (
 	"sync"
 )
 
-var (
-	ErrNotFound = errors.New("key not found")
-)
-
 type Store interface {
 	Set(key, value string) error
 	Get(key string) (string, error)
@@ -33,7 +29,7 @@ func (s *InMemoryStore) Get(key string) (string, error) {
 
 	val, ok := s.store[key]
 	if !ok {
-		return "", ErrNotFound
+		return "", errors.New("key not found")
 	}
 
 	return val, nil

@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/kayumovtd/url-shortener/internal/repository"
+	"github.com/kayumovtd/url-shortener/internal/service"
 )
 
 const testBaseURL = "http://fooBar:8080"
@@ -55,10 +56,11 @@ func TestPostHandler(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		store := repository.NewInMemoryStore()
-		handler := PostHandler(store, testBaseURL)
+	store := repository.NewInMemoryStore()
+	svc := service.NewShortenerService(store, testBaseURL)
+	handler := PostHandler(svc)
 
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
 			w := httptest.NewRecorder()
@@ -133,8 +135,8 @@ func TestGetHandler(t *testing.T) {
 		if tt.prepareStore != nil {
 			tt.prepareStore(store)
 		}
-
-		handler := GetHandler(store)
+		svc := service.NewShortenerService(store, testBaseURL)
+		handler := GetHandler(svc)
 
 		t.Run(tt.name, func(t *testing.T) {
 			url := "/" + tt.id
