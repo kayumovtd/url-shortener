@@ -20,7 +20,11 @@ func main() {
 	}
 	defer logger.Sync()
 
-	store := repository.NewInMemoryStore()
+	store, err := repository.NewFileStore(cfg.FileStoragePath)
+	if err != nil {
+		logger.Log.Fatal("failed to create file store", zap.Error(err))
+	}
+
 	svc := service.NewShortenerService(store, cfg.BaseURL)
 	r := handler.NewRouter(svc)
 
@@ -28,6 +32,7 @@ func main() {
 		zap.String("address", cfg.Address),
 		zap.String("baseURL", cfg.BaseURL),
 		zap.String("logLevel", cfg.LogLevel),
+		zap.String("fileStoragePath", cfg.FileStoragePath),
 	)
 
 	log.Fatal(http.ListenAndServe(cfg.Address, r))
