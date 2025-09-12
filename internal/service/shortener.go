@@ -5,10 +5,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/kayumovtd/url-shortener/internal/logger"
 	"github.com/kayumovtd/url-shortener/internal/repository"
 	"github.com/kayumovtd/url-shortener/internal/utils"
-	"go.uber.org/zap"
 )
 
 type ShortenerService struct {
@@ -25,19 +23,14 @@ func (s *ShortenerService) Shorten(originalURL string) (string, error) {
 
 	u, err := url.ParseRequestURI(trimmedURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid url: %w", err)
+		return "", fmt.Errorf("invalid url %q: %w", originalURL, err)
 	}
 	normalized := u.String()
 
 	shortID := utils.GenerateID(normalized)
 
 	if err := s.store.Set(shortID, normalized); err != nil {
-		logger.Log.Error("failed to save URL",
-			zap.String("id", shortID),
-			zap.String("url", originalURL),
-			zap.Error(err),
-		)
-		return "", fmt.Errorf("failed to save url: %w", err)
+		return "", fmt.Errorf("failed to save url %q with id %q: %w", normalized, shortID, err)
 	}
 
 	return fmt.Sprintf("%s/%s", s.baseURL, shortID), nil

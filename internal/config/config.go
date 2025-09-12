@@ -31,14 +31,14 @@ func NewConfig() *Config {
 	flag.StringVar(&cfg.FileStoragePath, "f", defaultFileStoragePath, "Path to file storage")
 	flag.Parse()
 
-	if addr := os.Getenv(envServerAddr); addr != "" {
-		cfg.Address = addr
+	if v, ok := os.LookupEnv(envServerAddr); ok {
+		cfg.Address = v
 	}
-	if base := os.Getenv(envBaseURL); base != "" {
-		cfg.BaseURL = base
+	if v, ok := os.LookupEnv(envBaseURL); ok {
+		cfg.BaseURL = v
 	}
-	if path := os.Getenv(envFileStoragePath); path != "" {
-		cfg.FileStoragePath = path
+	if v, ok := os.LookupEnv(envFileStoragePath); ok {
+		cfg.FileStoragePath = v
 	}
 
 	return cfg

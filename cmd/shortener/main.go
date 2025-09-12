@@ -15,25 +15,33 @@ import (
 func main() {
 	cfg := config.NewConfig()
 
-	if err := logger.Initialize(cfg.LogLevel); err != nil {
+	l, err := logger.New(cfg.LogLevel)
+	if err != nil {
 		log.Fatalf("failed to init logger: %v", err)
 	}
-	defer logger.Sync()
+
+	defer func() {
+		if err := l.Sync(); err != nil {
+			log.Printf("logger sync failed: %v", err)
+		}
+	}()
 
 	store, err := repository.NewFileStore(cfg.FileStoragePath)
 	if err != nil {
-		logger.Log.Fatal("failed to create file store", zap.Error(err))
+		l.Fatal("failed to create file store", zap.Error(err))
 	}
 
 	svc := service.NewShortenerService(store, cfg.BaseURL)
-	r := handler.NewRouter(svc)
+	r := handler.NewRouter(svc, l)
 
-	logger.Log.Info("starting server",
+	l.Info("starting server",
 		zap.String("address", cfg.Address),
 		zap.String("baseURL", cfg.BaseURL),
 		zap.String("logLevel", cfg.LogLevel),
 		zap.String("fileStoragePath", cfg.FileStoragePath),
 	)
 
-	log.Fatal(http.ListenAndServe(cfg.Address, r))
+	if err := http.ListenAndServe(cfg.Address, r); err != nil {
+		l.Fatal("server stopped with error", zap.Error(err))
+	}
 }

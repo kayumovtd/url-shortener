@@ -1,15 +1,19 @@
 package logger
 
 import (
+	"fmt"
+
 	"go.uber.org/zap"
 )
 
-var Log *zap.Logger = zap.NewNop()
+type Logger struct {
+	*zap.Logger
+}
 
-func Initialize(level string) error {
+func New(level string) (*Logger, error) {
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("parse log level %q: %w", level, err)
 	}
 
 	cfg := zap.NewProductionConfig()
@@ -17,13 +21,12 @@ func Initialize(level string) error {
 
 	zl, err := cfg.Build()
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("build zap logger: %w", err)
 	}
-	Log = zl
 
-	return nil
+	return &Logger{zl}, nil
 }
 
-func Sync() {
-	_ = Log.Sync()
+func (l *Logger) Sync() error {
+	return l.Logger.Sync()
 }
