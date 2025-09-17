@@ -6,13 +6,42 @@ import (
 
 	"github.com/kayumovtd/url-shortener/internal/config"
 	"github.com/kayumovtd/url-shortener/internal/handler"
+	"github.com/kayumovtd/url-shortener/internal/logger"
 	"github.com/kayumovtd/url-shortener/internal/repository"
+	"github.com/kayumovtd/url-shortener/internal/service"
+	"go.uber.org/zap"
 )
 
 func main() {
 	cfg := config.NewConfig()
-	store := repository.NewInMemoryStore()
-	r := handler.NewRouter(store, cfg.BaseURL)
 
-	log.Fatal(http.ListenAndServe(cfg.Address, r))
+	l, err := logger.New(cfg.LogLevel)
+	if err != nil {
+		log.Fatalf("failed to init logger: %v", err)
+	}
+
+	defer func() {
+		if err := l.Sync(); err != nil {
+			log.Printf("logger sync failed: %v", err)
+		}
+	}()
+
+	store, err := repository.NewFileStore(cfg.FileStoragePath)
+	if err != nil {
+		l.Fatal("failed to create file store", zap.Error(err))
+	}
+
+	svc := service.NewShortenerService(store, cfg.BaseURL)
+	r := handler.NewRouter(svc, l)
+
+	l.Info("starting server",
+		zap.String("address", cfg.Address),
+		zap.String("baseURL", cfg.BaseURL),
+		zap.String("logLevel", cfg.LogLevel),
+		zap.String("fileStoragePath", cfg.FileStoragePath),
+	)
+
+	if err := http.ListenAndServe(cfg.Address, r); err != nil {
+		l.Fatal("server stopped with error", zap.Error(err))
+	}
 }
