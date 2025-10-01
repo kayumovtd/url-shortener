@@ -15,6 +15,7 @@ func NewRouter(svc *service.ShortenerService, l *logger.Logger) chi.Router {
 	r.Post("/", PostHandler(svc))
 	r.Get("/{id}", GetHandler(svc))
 	r.Post("/api/shorten", ShortenHandler(svc))
+	r.Get("/ping", PingHandler(svc))
 
 	return r
 }

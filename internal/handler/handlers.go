@@ -40,3 +40,14 @@ func GetHandler(svc *service.ShortenerService) http.HandlerFunc {
 		http.Redirect(w, r, origURL, http.StatusTemporaryRedirect)
 	}
 }
+
+func PingHandler(svc *service.ShortenerService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if err := svc.Ping(r.Context()); err != nil {
+			http.Error(w, "storage not available", http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	}
+}

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -11,11 +12,16 @@ import (
 
 type ShortenerService struct {
 	store   repository.Store
+	dbStore repository.Store // для реализации пинга БД, в будущем уедет в store
 	baseURL string
 }
 
-func NewShortenerService(store repository.Store, baseURL string) *ShortenerService {
-	return &ShortenerService{store: store, baseURL: baseURL}
+func NewShortenerService(
+	store repository.Store,
+	dbStore repository.Store,
+	baseURL string,
+) *ShortenerService {
+	return &ShortenerService{store: store, dbStore: dbStore, baseURL: baseURL}
 }
 
 func (s *ShortenerService) Shorten(originalURL string) (string, error) {
@@ -47,4 +53,8 @@ func (s *ShortenerService) Unshorten(id string) (string, error) {
 	}
 
 	return orig, nil
+}
+
+func (s *ShortenerService) Ping(ctx context.Context) error {
+	return s.dbStore.Ping(ctx)
 }

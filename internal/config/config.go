@@ -10,9 +10,12 @@ const (
 	defaultBaseURL         = "http://localhost:8080"
 	defaultLogLevel        = "info"
 	defaultFileStoragePath = "storage.json"
-	envServerAddr          = "SERVER_ADDRESS"
-	envBaseURL             = "BASE_URL"
-	envFileStoragePath     = "FILE_STORAGE_PATH"
+	defaultDatabaseDSN     = ""
+
+	envServerAddr      = "SERVER_ADDRESS"
+	envBaseURL         = "BASE_URL"
+	envFileStoragePath = "FILE_STORAGE_PATH"
+	envDatabaseDSN     = "DATABASE_DSN"
 )
 
 type Config struct {
@@ -20,6 +23,7 @@ type Config struct {
 	BaseURL         string
 	LogLevel        string
 	FileStoragePath string
+	DatabaseDSN     string
 }
 
 func NewConfig() *Config {
@@ -29,6 +33,7 @@ func NewConfig() *Config {
 	flag.StringVar(&cfg.BaseURL, "b", defaultBaseURL, "Base URL for shortened URLs")
 	flag.StringVar(&cfg.LogLevel, "l", defaultLogLevel, "Level for logs")
 	flag.StringVar(&cfg.FileStoragePath, "f", defaultFileStoragePath, "Path to file storage")
+	flag.StringVar(&cfg.DatabaseDSN, "d", defaultDatabaseDSN, "PostgreSQL DSN")
 	flag.Parse()
 
 	if v, ok := os.LookupEnv(envServerAddr); ok {
@@ -39,6 +44,9 @@ func NewConfig() *Config {
 	}
 	if v, ok := os.LookupEnv(envFileStoragePath); ok {
 		cfg.FileStoragePath = v
+	}
+	if v, ok := os.LookupEnv(envDatabaseDSN); ok {
+		cfg.DatabaseDSN = v
 	}
 
 	return cfg

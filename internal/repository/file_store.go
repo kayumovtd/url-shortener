@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -55,6 +56,14 @@ func (s *FileStore) save() error {
 	}
 
 	return os.WriteFile(s.path, data, 0644)
+}
+
+func (s *FileStore) Ping(ctx context.Context) error {
+	// проверим, доступен ли файл
+	if _, err := os.Stat(s.path); err != nil {
+		return err
+	}
+	return nil
 }
 
 func NewFileStore(path string) (*FileStore, error) {

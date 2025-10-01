@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"errors"
 	"sync"
 )
@@ -28,6 +29,10 @@ func (s *InMemoryStore) Get(key string) (string, error) {
 	}
 
 	return val, nil
+}
+
+func (s *InMemoryStore) Ping(ctx context.Context) error {
+	return nil
 }
 
 func NewInMemoryStore() *InMemoryStore {

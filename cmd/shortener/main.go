@@ -31,7 +31,12 @@ func main() {
 		l.Fatal("failed to create file store", zap.Error(err))
 	}
 
-	svc := service.NewShortenerService(store, cfg.BaseURL)
+	dbStore, err := repository.NewDBStore(cfg.DatabaseDSN)
+	if err != nil {
+		l.Fatal("failed to create db store", zap.Error(err))
+	}
+
+	svc := service.NewShortenerService(store, dbStore, cfg.BaseURL)
 	r := handler.NewRouter(svc, l)
 
 	l.Info("starting server",
@@ -39,6 +44,7 @@ func main() {
 		zap.String("baseURL", cfg.BaseURL),
 		zap.String("logLevel", cfg.LogLevel),
 		zap.String("fileStoragePath", cfg.FileStoragePath),
+		zap.String("databaseDSN", cfg.DatabaseDSN),
 	)
 
 	if err := http.ListenAndServe(cfg.Address, r); err != nil {

@@ -63,7 +63,7 @@ func TestShortenHandler(t *testing.T) {
 	}
 
 	store := repository.NewInMemoryStore()
-	svc := service.NewShortenerService(store, testBaseURL)
+	svc := service.NewShortenerService(store, store, testBaseURL)
 	handler := ShortenHandler(svc)
 
 	for _, tt := range tests {

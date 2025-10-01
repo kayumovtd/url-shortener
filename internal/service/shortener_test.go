@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"testing"
 )
@@ -30,6 +31,10 @@ func (f *mockStore) Get(id string) (string, error) {
 	return val, nil
 }
 
+func (f *mockStore) Ping(ctx context.Context) error {
+	return nil
+}
+
 const testBaseURL = "http://fooBar:8080"
 
 func TestShorten(t *testing.T) {
@@ -45,7 +50,7 @@ func TestShorten(t *testing.T) {
 	}
 
 	store := newFakeStore()
-	svc := NewShortenerService(store, testBaseURL)
+	svc := NewShortenerService(store, store, testBaseURL)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -80,7 +85,7 @@ func TestUnshorten(t *testing.T) {
 	}
 
 	store := newFakeStore()
-	svc := NewShortenerService(store, testBaseURL)
+	svc := NewShortenerService(store, store, testBaseURL)
 
 	_ = store.Set("fooBar", "https://example.com")
 
@@ -109,7 +114,7 @@ func TestShorten_StoreError(t *testing.T) {
 	store := newFakeStore()
 	store.fail = true
 
-	svc := NewShortenerService(store, testBaseURL)
+	svc := NewShortenerService(store, store, testBaseURL)
 
 	_, err := svc.Shorten("https://example.com")
 	if err == nil {

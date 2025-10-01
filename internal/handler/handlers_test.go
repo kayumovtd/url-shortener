@@ -57,7 +57,7 @@ func TestPostHandler(t *testing.T) {
 	}
 
 	store := repository.NewInMemoryStore()
-	svc := service.NewShortenerService(store, testBaseURL)
+	svc := service.NewShortenerService(store, store, testBaseURL)
 	handler := PostHandler(svc)
 
 	for _, tt := range tests {
@@ -135,7 +135,7 @@ func TestGetHandler(t *testing.T) {
 		if tt.prepareStore != nil {
 			tt.prepareStore(store)
 		}
-		svc := service.NewShortenerService(store, testBaseURL)
+		svc := service.NewShortenerService(store, store, testBaseURL)
 		handler := GetHandler(svc)
 
 		t.Run(tt.name, func(t *testing.T) {
