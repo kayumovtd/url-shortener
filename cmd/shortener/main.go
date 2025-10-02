@@ -26,17 +26,12 @@ func main() {
 		}
 	}()
 
-	store, err := repository.NewFileStore(cfg.FileStoragePath)
+	store, err := repository.NewStore(cfg, l)
 	if err != nil {
-		l.Fatal("failed to create file store", zap.Error(err))
+		l.Fatal("failed to create store", zap.Error(err))
 	}
 
-	dbStore, err := repository.NewDBStore(cfg.DatabaseDSN)
-	if err != nil {
-		l.Fatal("failed to create db store", zap.Error(err))
-	}
-
-	svc := service.NewShortenerService(store, dbStore, cfg.BaseURL)
+	svc := service.NewShortenerService(store, cfg.BaseURL)
 	r := handler.NewRouter(svc, l)
 
 	l.Info("starting server",

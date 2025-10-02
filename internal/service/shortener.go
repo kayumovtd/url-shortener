@@ -12,19 +12,14 @@ import (
 
 type ShortenerService struct {
 	store   repository.Store
-	dbStore repository.Store // для реализации пинга БД, в будущем уедет в store
 	baseURL string
 }
 
-func NewShortenerService(
-	store repository.Store,
-	dbStore repository.Store,
-	baseURL string,
-) *ShortenerService {
-	return &ShortenerService{store: store, dbStore: dbStore, baseURL: baseURL}
+func NewShortenerService(store repository.Store, baseURL string) *ShortenerService {
+	return &ShortenerService{store: store, baseURL: baseURL}
 }
 
-func (s *ShortenerService) Shorten(originalURL string) (string, error) {
+func (s *ShortenerService) Shorten(ctx context.Context, originalURL string) (string, error) {
 	trimmedURL := strings.TrimSpace(originalURL)
 
 	u, err := url.ParseRequestURI(trimmedURL)
@@ -35,19 +30,19 @@ func (s *ShortenerService) Shorten(originalURL string) (string, error) {
 
 	shortID := utils.GenerateID(normalized)
 
-	if err := s.store.Set(shortID, normalized); err != nil {
+	if err := s.store.SaveURL(ctx, shortID, normalized); err != nil {
 		return "", fmt.Errorf("failed to save url %q with id %q: %w", normalized, shortID, err)
 	}
 
 	return fmt.Sprintf("%s/%s", s.baseURL, shortID), nil
 }
 
-func (s *ShortenerService) Unshorten(id string) (string, error) {
+func (s *ShortenerService) Unshorten(ctx context.Context, id string) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("empty id")
 	}
 
-	orig, err := s.store.Get(id)
+	orig, err := s.store.GetURL(ctx, id)
 	if err != nil {
 		return "", fmt.Errorf("not found: %w", err)
 	}
@@ -56,5 +51,5 @@ func (s *ShortenerService) Unshorten(id string) (string, error) {
 }
 
 func (s *ShortenerService) Ping(ctx context.Context) error {
-	return s.dbStore.Ping(ctx)
+	return s.store.Ping(ctx)
 }

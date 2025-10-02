@@ -6,6 +6,7 @@ import (
 	"testing"
 )
 
+// TODO: Заюзать gomock
 type mockStore struct {
 	data map[string]string
 	fail bool
@@ -15,16 +16,16 @@ func newFakeStore() *mockStore {
 	return &mockStore{data: make(map[string]string)}
 }
 
-func (f *mockStore) Set(id, url string) error {
+func (f *mockStore) SaveURL(ctx context.Context, shortURL, originalURL string) error {
 	if f.fail {
 		return errors.New("store error")
 	}
-	f.data[id] = url
+	f.data[shortURL] = originalURL
 	return nil
 }
 
-func (f *mockStore) Get(id string) (string, error) {
-	val, ok := f.data[id]
+func (f *mockStore) GetURL(ctx context.Context, shortURL string) (string, error) {
+	val, ok := f.data[shortURL]
 	if !ok {
 		return "", errors.New("not found")
 	}
@@ -34,6 +35,8 @@ func (f *mockStore) Get(id string) (string, error) {
 func (f *mockStore) Ping(ctx context.Context) error {
 	return nil
 }
+
+func (f *mockStore) Close() {}
 
 const testBaseURL = "http://fooBar:8080"
 
@@ -50,11 +53,11 @@ func TestShorten(t *testing.T) {
 	}
 
 	store := newFakeStore()
-	svc := NewShortenerService(store, store, testBaseURL)
+	svc := NewShortenerService(store, testBaseURL)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := svc.Shorten(tt.input)
+			got, err := svc.Shorten(t.Context(), tt.input)
 			if tt.shouldErr {
 				if err == nil {
 					t.Errorf("expected error, got nil (result=%q)", got)
@@ -85,13 +88,13 @@ func TestUnshorten(t *testing.T) {
 	}
 
 	store := newFakeStore()
-	svc := NewShortenerService(store, store, testBaseURL)
+	svc := NewShortenerService(store, testBaseURL)
 
-	_ = store.Set("fooBar", "https://example.com")
+	_ = store.SaveURL(t.Context(), "fooBar", "https://example.com")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := svc.Unshorten(tt.input)
+			got, err := svc.Unshorten(t.Context(), tt.input)
 
 			if tt.shouldErr {
 				if err == nil {
@@ -114,9 +117,9 @@ func TestShorten_StoreError(t *testing.T) {
 	store := newFakeStore()
 	store.fail = true
 
-	svc := NewShortenerService(store, store, testBaseURL)
+	svc := NewShortenerService(store, testBaseURL)
 
-	_, err := svc.Shorten("https://example.com")
+	_, err := svc.Shorten(t.Context(), "https://example.com")
 	if err == nil {
 		t.Errorf("expected store error, got nil")
 	}

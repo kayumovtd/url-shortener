@@ -3,7 +3,8 @@ package repository
 import "context"
 
 type Store interface {
-	Set(key, value string) error
-	Get(key string) (string, error)
+	SaveURL(ctx context.Context, shortURL, originalURL string) error
+	GetURL(ctx context.Context, shortURL string) (string, error)
 	Ping(ctx context.Context) error
+	Close()
 }

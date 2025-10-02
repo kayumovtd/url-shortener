@@ -16,7 +16,7 @@ func ShortenHandler(svc *service.ShortenerService) http.HandlerFunc {
 			return
 		}
 
-		shortURL, err := svc.Shorten(req.URL)
+		shortURL, err := svc.Shorten(r.Context(), req.URL)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return

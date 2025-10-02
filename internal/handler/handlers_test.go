@@ -57,7 +57,7 @@ func TestPostHandler(t *testing.T) {
 	}
 
 	store := repository.NewInMemoryStore()
-	svc := service.NewShortenerService(store, store, testBaseURL)
+	svc := service.NewShortenerService(store, testBaseURL)
 	handler := PostHandler(svc)
 
 	for _, tt := range tests {
@@ -98,14 +98,14 @@ func TestGetHandler(t *testing.T) {
 	tests := []struct {
 		name         string
 		id           string
-		prepareStore func(store repository.Store)
+		prepareStore func(ctx context.Context, store repository.Store)
 		want         want
 	}{
 		{
 			name: "existing_id",
 			id:   "abc123",
-			prepareStore: func(store repository.Store) {
-				store.Set("abc123", "https://example.com")
+			prepareStore: func(ctx context.Context, store repository.Store) {
+				store.SaveURL(ctx, "abc123", "https://example.com")
 			},
 			want: want{
 				statusCode: http.StatusTemporaryRedirect,
@@ -133,9 +133,9 @@ func TestGetHandler(t *testing.T) {
 	for _, tt := range tests {
 		store := repository.NewInMemoryStore()
 		if tt.prepareStore != nil {
-			tt.prepareStore(store)
+			tt.prepareStore(t.Context(), store)
 		}
-		svc := service.NewShortenerService(store, store, testBaseURL)
+		svc := service.NewShortenerService(store, testBaseURL)
 		handler := GetHandler(svc)
 
 		t.Run(tt.name, func(t *testing.T) {

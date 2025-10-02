@@ -17,7 +17,7 @@ func PostHandler(svc *service.ShortenerService) http.HandlerFunc {
 			return
 		}
 
-		shortURL, err := svc.Shorten(string(body))
+		shortURL, err := svc.Shorten(r.Context(), string(body))
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
@@ -32,7 +32,7 @@ func PostHandler(svc *service.ShortenerService) http.HandlerFunc {
 func GetHandler(svc *service.ShortenerService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		origURL, err := svc.Unshorten(id)
+		origURL, err := svc.Unshorten(r.Context(), id)
 		if err != nil {
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return

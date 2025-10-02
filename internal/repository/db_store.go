@@ -2,14 +2,53 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kayumovtd/url-shortener/migrations"
 )
 
 type DBStore struct {
 	pool *pgxpool.Pool
+}
+
+func (s *DBStore) SaveURL(ctx context.Context, shortURL, originalURL string) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO urls (short_url, original_url) 
+		 VALUES ($1, $2)
+		 ON CONFLICT (short_url) DO UPDATE SET original_url = EXCLUDED.original_url`,
+		shortURL, originalURL,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set url: %w", err)
+	}
+	return nil
+}
+
+func (s *DBStore) GetURL(ctx context.Context, shortURL string) (string, error) {
+	var original string
+	err := s.pool.QueryRow(ctx,
+		`SELECT original_url FROM urls WHERE short_url = $1`,
+		shortURL,
+	).Scan(&original)
+
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return "", fmt.Errorf("request canceled or timed out: %w", err)
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to get original url: %w", err)
+	}
+	return original, nil
+}
+
+func (s *DBStore) Ping(ctx context.Context) error {
+	return s.pool.Ping(ctx)
+}
+
+func (s *DBStore) Close() {
+	s.pool.Close()
 }
 
 func NewDBStore(dsn string) (*DBStore, error) {
@@ -18,24 +57,16 @@ func NewDBStore(dsn string) (*DBStore, error) {
 
 	pool, err := pgxpool.New(ctx, dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect postgres: %w", err)
+		return nil, fmt.Errorf("failed to connect db: %w", err)
 	}
 
-	// if err := pool.Ping(ctx); err != nil {
-	// 	return nil, fmt.Errorf("failed to ping postgres: %w", err)
-	// }
+	if err := pool.Ping(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping db: %w", err)
+	}
+
+	if err := migrations.ApplyMigrations(dsn); err != nil {
+		return nil, fmt.Errorf("failed to apply migrations: %w", err)
+	}
 
 	return &DBStore{pool: pool}, nil
-}
-
-func (s *DBStore) Set(key, value string) error {
-	return fmt.Errorf("not implemented yet")
-}
-
-func (s *DBStore) Get(key string) (string, error) {
-	return "", fmt.Errorf("not implemented yet")
-}
-
-func (s *DBStore) Ping(ctx context.Context) error {
-	return s.pool.Ping(ctx)
 }
