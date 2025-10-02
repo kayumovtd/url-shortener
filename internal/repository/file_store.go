@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"strconv"
 	"sync"
@@ -22,6 +23,14 @@ func (s *FileStore) SaveURL(ctx context.Context, shortURL, originalURL string) e
 	defer s.mu.Unlock()
 
 	s.store[shortURL] = originalURL
+	return s.save()
+}
+
+func (s *FileStore) SaveURLs(ctx context.Context, urls map[string]string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	maps.Copy(s.store, urls)
 	return s.save()
 }
 

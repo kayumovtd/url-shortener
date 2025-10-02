@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"maps"
 	"sync"
 )
 
@@ -16,6 +17,14 @@ func (s *InMemoryStore) SaveURL(ctx context.Context, shortURL, originalURL strin
 	defer s.mu.Unlock()
 
 	s.store[shortURL] = originalURL
+	return nil
+}
+
+func (s *InMemoryStore) SaveURLs(ctx context.Context, urls map[string]string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	maps.Copy(s.store, urls)
 	return nil
 }
 

@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"maps"
 	"testing"
+
+	"github.com/kayumovtd/url-shortener/internal/model"
 )
 
 // TODO: Заюзать gomock
@@ -21,6 +24,14 @@ func (f *mockStore) SaveURL(ctx context.Context, shortURL, originalURL string) e
 		return errors.New("store error")
 	}
 	f.data[shortURL] = originalURL
+	return nil
+}
+
+func (f *mockStore) SaveURLs(ctx context.Context, urls map[string]string) error {
+	if f.fail {
+		return errors.New("store error")
+	}
+	maps.Copy(f.data, urls)
 	return nil
 }
 
@@ -70,6 +81,67 @@ func TestShorten(t *testing.T) {
 			}
 			if got == "" {
 				t.Errorf("expected non-empty short url")
+			}
+		})
+	}
+}
+
+func TestShortenBatch(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     []model.ShortenBatchRequestItem
+		shouldErr bool
+	}{
+		{
+			name: "valid_batch",
+			input: []model.ShortenBatchRequestItem{
+				{CorrelationID: "1", OriginalURL: "https://example1.com"},
+				{CorrelationID: "2", OriginalURL: "https://example2.com"},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "invalid_batch",
+			input: []model.ShortenBatchRequestItem{
+				{CorrelationID: "1", OriginalURL: "https://example.com"},
+				{CorrelationID: "2", OriginalURL: "foobar"},
+			},
+			shouldErr: true,
+		},
+		{
+			name:      "empty_batch",
+			input:     []model.ShortenBatchRequestItem{},
+			shouldErr: true,
+		},
+	}
+
+	store := newFakeStore()
+	svc := NewShortenerService(store, testBaseURL)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := svc.ShortenBatch(context.Background(), tt.input)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Errorf("expected error, got nil (result=%v)", got)
+				}
+				if got != nil {
+					t.Errorf("expected nil result, got: %v", got)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if len(got) != len(tt.input) {
+				t.Errorf("expected %d results, got %d", len(tt.input), len(got))
+			}
+			for _, resp := range got {
+				if resp.ShortURL == "" {
+					t.Errorf("expected non-empty short url for correlation_id=%s", resp.CorrelationID)
+				}
 			}
 		})
 	}

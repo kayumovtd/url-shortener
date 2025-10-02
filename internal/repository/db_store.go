@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kayumovtd/url-shortener/migrations"
 )
@@ -24,6 +25,58 @@ func (s *DBStore) SaveURL(ctx context.Context, shortURL, originalURL string) err
 	if err != nil {
 		return fmt.Errorf("failed to set url: %w", err)
 	}
+	return nil
+}
+
+func (s *DBStore) SaveURLs(ctx context.Context, urls map[string]string) error {
+	if len(urls) == 0 {
+		return nil
+	}
+
+	const batchSize = 500
+
+	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+
+	defer tx.Rollback(ctx)
+
+	batch := &pgx.Batch{}
+	count := 0
+
+	for short, orig := range urls {
+		batch.Queue(
+			`INSERT INTO urls (short_url, original_url)
+			 VALUES ($1, $2) 
+		 	 ON CONFLICT (short_url) DO UPDATE SET original_url = EXCLUDED.original_url`,
+			short, orig,
+		)
+		count++
+
+		if count >= batchSize {
+			br := tx.SendBatch(ctx, batch)
+			if err := br.Close(); err != nil {
+				return fmt.Errorf("batch execution failed: %w", err)
+			}
+
+			batch = &pgx.Batch{}
+			count = 0
+		}
+	}
+
+	// финальный батч (если что-то осталось < batchSize)
+	if count > 0 {
+		br := tx.SendBatch(ctx, batch)
+		if err := br.Close(); err != nil {
+			return fmt.Errorf("final batch execution failed: %w", err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit failed: %w", err)
+	}
+
 	return nil
 }
 

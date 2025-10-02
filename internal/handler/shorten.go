@@ -29,3 +29,23 @@ func ShortenHandler(svc *service.ShortenerService) http.HandlerFunc {
 		json.NewEncoder(w).Encode(resp)
 	}
 }
+
+func ShortenBatchHandler(svc *service.ShortenerService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req []model.ShortenBatchRequestItem
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+
+		resp, err := svc.ShortenBatch(r.Context(), req)
+		if err != nil {
+			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		json.NewEncoder(w).Encode(resp)
+	}
+}
