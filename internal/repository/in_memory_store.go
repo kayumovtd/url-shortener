@@ -16,6 +16,12 @@ func (s *InMemoryStore) SaveURL(ctx context.Context, shortURL, originalURL strin
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	for existingShort, existingOriginal := range s.store {
+		if existingOriginal == originalURL {
+			return NewErrStoreConflict(existingShort, existingOriginal, nil)
+		}
+	}
+
 	s.store[shortURL] = originalURL
 	return nil
 }

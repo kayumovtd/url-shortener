@@ -1,6 +1,8 @@
 package repository
 
-import "context"
+import (
+	"context"
+)
 
 type Store interface {
 	SaveURL(ctx context.Context, shortURL, originalURL string) error

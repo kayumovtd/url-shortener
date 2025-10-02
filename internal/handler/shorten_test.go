@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -13,6 +14,9 @@ import (
 )
 
 func TestShortenHandler(t *testing.T) {
+	existingURL := "https://existing.com"
+	existingShort := "abc123"
+
 	type want struct {
 		statusCode  int
 		contentType string
@@ -60,9 +64,20 @@ func TestShortenHandler(t *testing.T) {
 				decoded:     false,
 			},
 		},
+		{
+			name: "conflict_url",
+			body: fmt.Sprintf(`{"url":"%s"}`, existingURL),
+			want: want{
+				statusCode:  http.StatusConflict,
+				contentType: "application/json",
+				decoded:     true,
+			},
+		},
 	}
 
 	store := repository.NewInMemoryStore()
+	store.SaveURL(t.Context(), existingShort, existingURL)
+
 	svc := service.NewShortenerService(store, testBaseURL)
 	handler := ShortenHandler(svc)
 

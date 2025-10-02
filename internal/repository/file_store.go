@@ -22,6 +22,12 @@ func (s *FileStore) SaveURL(ctx context.Context, shortURL, originalURL string) e
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	for existingShort, existingOriginal := range s.store {
+		if existingOriginal == originalURL {
+			return NewErrStoreConflict(existingShort, existingOriginal, nil)
+		}
+	}
+
 	s.store[shortURL] = originalURL
 	return s.save()
 }
@@ -68,10 +74,6 @@ func (s *FileStore) save() error {
 }
 
 func (s *FileStore) Ping(ctx context.Context) error {
-	// проверим, доступен ли файл
-	if _, err := os.Stat(s.path); err != nil {
-		return err
-	}
 	return nil
 }
 

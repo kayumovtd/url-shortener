@@ -16,6 +16,9 @@ import (
 const testBaseURL = "http://fooBar:8080"
 
 func TestPostHandler(t *testing.T) {
+	existingURL := "https://existing.com"
+	existingShort := "abc123"
+
 	type want struct {
 		statusCode  int
 		contentType string
@@ -54,9 +57,20 @@ func TestPostHandler(t *testing.T) {
 				body:        http.StatusText(http.StatusBadRequest),
 			},
 		},
+		{
+			name: "conflict_url",
+			body: existingURL,
+			want: want{
+				statusCode:  http.StatusConflict,
+				contentType: "text/plain",
+				body:        testBaseURL, // проверка, что ответ содержит какой-то урл
+			},
+		},
 	}
 
 	store := repository.NewInMemoryStore()
+	store.SaveURL(t.Context(), existingShort, existingURL)
+
 	svc := service.NewShortenerService(store, testBaseURL)
 	handler := PostHandler(svc)
 

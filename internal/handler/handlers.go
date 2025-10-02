@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"errors"
 	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/kayumovtd/url-shortener/internal/service"
+	"github.com/kayumovtd/url-shortener/internal/utils"
 )
 
 func PostHandler(svc *service.ShortenerService) http.HandlerFunc {
@@ -19,13 +21,16 @@ func PostHandler(svc *service.ShortenerService) http.HandlerFunc {
 
 		shortURL, err := svc.Shorten(r.Context(), string(body))
 		if err != nil {
+			var conflict *service.ErrShortenerConflict
+			if errors.As(err, &conflict) {
+				utils.WritePlainText(w, http.StatusConflict, conflict.ResultURL)
+				return
+			}
 			http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 			return
 		}
 
-		w.Header().Set("Content-Type", "text/plain")
-		w.WriteHeader(http.StatusCreated)
-		w.Write([]byte(shortURL))
+		utils.WritePlainText(w, http.StatusCreated, shortURL)
 	}
 }
 
@@ -48,6 +53,5 @@ func PingHandler(svc *service.ShortenerService) http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
 	}
 }

@@ -30,10 +30,14 @@ func (s *ShortenerService) Shorten(ctx context.Context, originalURL string) (str
 	shortID := utils.GenerateID(url)
 
 	if err := s.store.SaveURL(ctx, shortID, url); err != nil {
+		var conflict *repository.ErrStoreConflict
+		if errors.As(err, &conflict) {
+			return "", NewErrShortenerConflict(s.makeResultURL(conflict.ShortURL), err)
+		}
 		return "", fmt.Errorf("failed to save url %q with id %q: %w", url, shortID, err)
 	}
 
-	return fmt.Sprintf("%s/%s", s.baseURL, shortID), nil
+	return s.makeResultURL(shortID), nil
 }
 
 func (s *ShortenerService) ShortenBatch(
@@ -75,6 +79,7 @@ func (s *ShortenerService) ShortenBatch(
 
 	if hasErrors {
 		// Отдаём все ошибки через Join
+		// TODO: Можно сделать свой тип ошибки и выдавать юзеру массив битых урлов
 		return nil, errors.Join(errs...)
 	}
 
@@ -111,4 +116,8 @@ func (s *ShortenerService) normalizeURL(originalURL string) (string, error) {
 	}
 
 	return u.String(), nil
+}
+
+func (s *ShortenerService) makeResultURL(shortID string) string {
+	return fmt.Sprintf("%s/%s", s.baseURL, shortID)
 }

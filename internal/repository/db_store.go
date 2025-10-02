@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/kayumovtd/url-shortener/migrations"
 )
@@ -16,14 +18,21 @@ type DBStore struct {
 }
 
 func (s *DBStore) SaveURL(ctx context.Context, shortURL, originalURL string) error {
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO urls (short_url, original_url) 
-		 VALUES ($1, $2)
-		 ON CONFLICT (short_url) DO UPDATE SET original_url = EXCLUDED.original_url`,
-		shortURL, originalURL,
-	)
+	query := `
+		INSERT INTO urls (short_url, original_url)
+		VALUES ($1, $2)
+		RETURNING short_url;
+	`
+
+	var result string
+	err := s.pool.QueryRow(ctx, query, shortURL, originalURL).Scan(&result)
+
 	if err != nil {
-		return fmt.Errorf("failed to set url: %w", err)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			return NewErrStoreConflict(shortURL, originalURL, err)
+		}
+		return err
 	}
 	return nil
 }
