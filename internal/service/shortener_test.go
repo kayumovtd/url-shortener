@@ -1,34 +1,13 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"testing"
+
+	"github.com/kayumovtd/url-shortener/internal/model"
+	"github.com/kayumovtd/url-shortener/internal/repository"
 )
-
-type mockStore struct {
-	data map[string]string
-	fail bool
-}
-
-func newFakeStore() *mockStore {
-	return &mockStore{data: make(map[string]string)}
-}
-
-func (f *mockStore) Set(id, url string) error {
-	if f.fail {
-		return errors.New("store error")
-	}
-	f.data[id] = url
-	return nil
-}
-
-func (f *mockStore) Get(id string) (string, error) {
-	val, ok := f.data[id]
-	if !ok {
-		return "", errors.New("not found")
-	}
-	return val, nil
-}
 
 const testBaseURL = "http://fooBar:8080"
 
@@ -44,12 +23,12 @@ func TestShorten(t *testing.T) {
 		{"empty_string", "", true},
 	}
 
-	store := newFakeStore()
+	store := repository.NewMockStore()
 	svc := NewShortenerService(store, testBaseURL)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := svc.Shorten(tt.input)
+			got, err := svc.Shorten(t.Context(), tt.input)
 			if tt.shouldErr {
 				if err == nil {
 					t.Errorf("expected error, got nil (result=%q)", got)
@@ -67,6 +46,67 @@ func TestShorten(t *testing.T) {
 	}
 }
 
+func TestShortenBatch(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     []model.ShortenBatchRequestItem
+		shouldErr bool
+	}{
+		{
+			name: "valid_batch",
+			input: []model.ShortenBatchRequestItem{
+				{CorrelationID: "1", OriginalURL: "https://example1.com"},
+				{CorrelationID: "2", OriginalURL: "https://example2.com"},
+			},
+			shouldErr: false,
+		},
+		{
+			name: "invalid_batch",
+			input: []model.ShortenBatchRequestItem{
+				{CorrelationID: "1", OriginalURL: "https://example.com"},
+				{CorrelationID: "2", OriginalURL: "foobar"},
+			},
+			shouldErr: true,
+		},
+		{
+			name:      "empty_batch",
+			input:     []model.ShortenBatchRequestItem{},
+			shouldErr: true,
+		},
+	}
+
+	store := repository.NewMockStore()
+	svc := NewShortenerService(store, testBaseURL)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := svc.ShortenBatch(context.Background(), tt.input)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Errorf("expected error, got nil (result=%v)", got)
+				}
+				if got != nil {
+					t.Errorf("expected nil result, got: %v", got)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+			if len(got) != len(tt.input) {
+				t.Errorf("expected %d results, got %d", len(tt.input), len(got))
+			}
+			for _, resp := range got {
+				if resp.ShortURL == "" {
+					t.Errorf("expected non-empty short url for correlation_id=%s", resp.CorrelationID)
+				}
+			}
+		})
+	}
+}
+
 func TestUnshorten(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -79,14 +119,14 @@ func TestUnshorten(t *testing.T) {
 		{"empty_id", "", "", true},
 	}
 
-	store := newFakeStore()
+	store := repository.NewMockStore()
 	svc := NewShortenerService(store, testBaseURL)
 
-	_ = store.Set("fooBar", "https://example.com")
+	_ = store.SaveURL(t.Context(), "fooBar", "https://example.com")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := svc.Unshorten(tt.input)
+			got, err := svc.Unshorten(t.Context(), tt.input)
 
 			if tt.shouldErr {
 				if err == nil {
@@ -106,13 +146,29 @@ func TestUnshorten(t *testing.T) {
 }
 
 func TestShorten_StoreError(t *testing.T) {
-	store := newFakeStore()
-	store.fail = true
+	store := repository.NewMockStore()
+	store.ErrorType = repository.SomeError
 
 	svc := NewShortenerService(store, testBaseURL)
 
-	_, err := svc.Shorten("https://example.com")
+	_, err := svc.Shorten(t.Context(), "https://example.com")
 	if err == nil {
 		t.Errorf("expected store error, got nil")
+	}
+}
+
+func TestShorten_ConflictStoreError(t *testing.T) {
+	store := repository.NewMockStore()
+	store.ErrorType = repository.ConflictError
+
+	svc := NewShortenerService(store, testBaseURL)
+
+	_, err := svc.Shorten(t.Context(), "https://example.com")
+	if err == nil {
+		t.Errorf("expected store error, got nil")
+	}
+	var conflictErr *ErrShortenerConflict
+	if !errors.As(err, &conflictErr) {
+		t.Errorf("expected conflict store error, got: %v", err)
 	}
 }

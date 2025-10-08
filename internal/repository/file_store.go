@@ -1,8 +1,10 @@
 package repository
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"maps"
 	"os"
 	"strconv"
 	"sync"
@@ -16,19 +18,33 @@ type FileStore struct {
 	path  string
 }
 
-func (s *FileStore) Set(key, value string) error {
+func (s *FileStore) SaveURL(ctx context.Context, shortURL, originalURL string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.store[key] = value
+	for existingShort, existingOriginal := range s.store {
+		if existingOriginal == originalURL {
+			return NewErrStoreConflict(existingShort, existingOriginal, nil)
+		}
+	}
+
+	s.store[shortURL] = originalURL
 	return s.save()
 }
 
-func (s *FileStore) Get(key string) (string, error) {
+func (s *FileStore) SaveURLs(ctx context.Context, urls map[string]string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	val, ok := s.store[key]
+	maps.Copy(s.store, urls)
+	return s.save()
+}
+
+func (s *FileStore) GetURL(ctx context.Context, shortURL string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	val, ok := s.store[shortURL]
 	if !ok {
 		return "", errors.New("key not found")
 	}
@@ -56,6 +72,12 @@ func (s *FileStore) save() error {
 
 	return os.WriteFile(s.path, data, 0644)
 }
+
+func (s *FileStore) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (s *FileStore) Close() {}
 
 func NewFileStore(path string) (*FileStore, error) {
 	fs := &FileStore{

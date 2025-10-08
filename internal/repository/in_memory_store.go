@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"context"
 	"errors"
+	"maps"
 	"sync"
 )
 
@@ -10,25 +12,45 @@ type InMemoryStore struct {
 	store map[string]string
 }
 
-func (s *InMemoryStore) Set(key, value string) error {
+func (s *InMemoryStore) SaveURL(ctx context.Context, shortURL, originalURL string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.store[key] = value
+	for existingShort, existingOriginal := range s.store {
+		if existingOriginal == originalURL {
+			return NewErrStoreConflict(existingShort, existingOriginal, nil)
+		}
+	}
+
+	s.store[shortURL] = originalURL
 	return nil
 }
 
-func (s *InMemoryStore) Get(key string) (string, error) {
+func (s *InMemoryStore) SaveURLs(ctx context.Context, urls map[string]string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	val, ok := s.store[key]
+	maps.Copy(s.store, urls)
+	return nil
+}
+
+func (s *InMemoryStore) GetURL(ctx context.Context, shortURL string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	val, ok := s.store[shortURL]
 	if !ok {
 		return "", errors.New("key not found")
 	}
 
 	return val, nil
 }
+
+func (s *InMemoryStore) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (s *InMemoryStore) Close() {}
 
 func NewInMemoryStore() *InMemoryStore {
 	return &InMemoryStore{

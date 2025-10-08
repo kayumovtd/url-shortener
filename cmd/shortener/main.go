@@ -26,9 +26,9 @@ func main() {
 		}
 	}()
 
-	store, err := repository.NewFileStore(cfg.FileStoragePath)
+	store, err := repository.NewStore(cfg, l)
 	if err != nil {
-		l.Fatal("failed to create file store", zap.Error(err))
+		l.Fatal("failed to create store", zap.Error(err))
 	}
 
 	svc := service.NewShortenerService(store, cfg.BaseURL)
@@ -39,6 +39,7 @@ func main() {
 		zap.String("baseURL", cfg.BaseURL),
 		zap.String("logLevel", cfg.LogLevel),
 		zap.String("fileStoragePath", cfg.FileStoragePath),
+		zap.String("databaseDSN", cfg.DatabaseDSN),
 	)
 
 	if err := http.ListenAndServe(cfg.Address, r); err != nil {

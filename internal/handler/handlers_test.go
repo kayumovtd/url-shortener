@@ -16,6 +16,9 @@ import (
 const testBaseURL = "http://fooBar:8080"
 
 func TestPostHandler(t *testing.T) {
+	existingURL := "https://existing.com"
+	existingShort := "abc123"
+
 	type want struct {
 		statusCode  int
 		contentType string
@@ -54,9 +57,20 @@ func TestPostHandler(t *testing.T) {
 				body:        http.StatusText(http.StatusBadRequest),
 			},
 		},
+		{
+			name: "conflict_url",
+			body: existingURL,
+			want: want{
+				statusCode:  http.StatusConflict,
+				contentType: "text/plain",
+				body:        testBaseURL, // проверка, что ответ содержит какой-то урл
+			},
+		},
 	}
 
 	store := repository.NewInMemoryStore()
+	store.SaveURL(t.Context(), existingShort, existingURL)
+
 	svc := service.NewShortenerService(store, testBaseURL)
 	handler := PostHandler(svc)
 
@@ -98,14 +112,14 @@ func TestGetHandler(t *testing.T) {
 	tests := []struct {
 		name         string
 		id           string
-		prepareStore func(store repository.Store)
+		prepareStore func(ctx context.Context, store repository.Store)
 		want         want
 	}{
 		{
 			name: "existing_id",
 			id:   "abc123",
-			prepareStore: func(store repository.Store) {
-				store.Set("abc123", "https://example.com")
+			prepareStore: func(ctx context.Context, store repository.Store) {
+				store.SaveURL(ctx, "abc123", "https://example.com")
 			},
 			want: want{
 				statusCode: http.StatusTemporaryRedirect,
@@ -133,7 +147,7 @@ func TestGetHandler(t *testing.T) {
 	for _, tt := range tests {
 		store := repository.NewInMemoryStore()
 		if tt.prepareStore != nil {
-			tt.prepareStore(store)
+			tt.prepareStore(t.Context(), store)
 		}
 		svc := service.NewShortenerService(store, testBaseURL)
 		handler := GetHandler(svc)
