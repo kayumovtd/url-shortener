@@ -90,3 +90,27 @@ func GetUserURLsHandler(svc *service.ShortenerService, up service.UserProvider) 
 		utils.WriteJSON(w, http.StatusOK, urls)
 	}
 }
+
+func DeleteUserURLsHandler(svc *service.ShortenerService, up service.UserProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := up.GetUserID(r.Context())
+		if !ok || userID == "" {
+			utils.WriteJSONError(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+			return
+		}
+
+		var ids []string
+		if err := json.NewDecoder(r.Body).Decode(&ids); err != nil {
+			utils.WriteJSONError(w, http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+			return
+		}
+
+		if len(ids) == 0 {
+			utils.WriteJSONError(w, http.StatusBadRequest, "no ids provided")
+			return
+		}
+
+		svc.EnqueueDeletion(userID, ids)
+		utils.WriteJSON(w, http.StatusAccepted, http.StatusText(http.StatusAccepted))
+	}
+}

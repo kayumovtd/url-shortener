@@ -20,10 +20,12 @@ func NewRouter(
 
 	r.Post("/", PostHandler(svc, auth))
 	r.Get("/{id}", GetHandler(svc))
+	r.Get("/ping", PingHandler(svc))
+
+	r.Get("/api/user/urls", GetUserURLsHandler(svc, auth))
 	r.Post("/api/shorten", ShortenHandler(svc, auth))
 	r.Post("/api/shorten/batch", ShortenBatchHandler(svc, auth))
-	r.Get("/ping", PingHandler(svc))
-	r.Get("/api/user/urls", GetUserURLsHandler(svc, auth))
+	r.Delete("/api/user/urls", DeleteUserURLsHandler(svc, auth))
 
 	return r
 }

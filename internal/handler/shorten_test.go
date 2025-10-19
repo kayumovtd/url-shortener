@@ -175,3 +175,23 @@ func TestGetUserURLsHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteUserURLsHandler(t *testing.T) {
+	store := repository.NewMockStore()
+	svc := service.NewShortenerService(store, testBaseURL)
+	up := mocks.NewMockUserProvider(testUserID, true)
+	handler := DeleteUserURLsHandler(svc, up)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/user/urls", bytes.NewBufferString(`["id1","id2","id3"]`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	handler(w, req)
+
+	res := w.Result()
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusAccepted {
+		t.Errorf("status = %d, want %d", res.StatusCode, http.StatusAccepted)
+	}
+}

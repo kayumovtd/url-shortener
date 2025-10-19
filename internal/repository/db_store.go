@@ -93,13 +93,14 @@ func (s *DBStore) SaveURLs(ctx context.Context, urls map[string]string, userID s
 func (s *DBStore) GetURL(ctx context.Context, shortURL string) (model.URLRecord, error) {
 	var result model.URLRecord
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, user_id, short_url, original_url FROM urls WHERE short_url = $1`,
+		`SELECT id, user_id, short_url, original_url, is_deleted FROM urls WHERE short_url = $1`,
 		shortURL,
 	).Scan(
 		&result.ID,
 		&result.UserID,
 		&result.ShortURL,
 		&result.OriginalURL,
+		&result.IsDeleted,
 	)
 
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
@@ -136,6 +137,24 @@ func (s *DBStore) GetUserURLs(ctx context.Context, userID string) ([]model.URLRe
 	}
 
 	return urls, nil
+}
+
+func (s *DBStore) MarkURLsDeleted(ctx context.Context, userID string, shortURLs []string) error {
+	if len(shortURLs) == 0 {
+		return nil
+	}
+
+	query := `
+        UPDATE urls
+        SET is_deleted = TRUE
+        WHERE user_id = $1 AND short_url = ANY($2)
+    `
+	_, err := s.pool.Exec(ctx, query, userID, shortURLs)
+	if err != nil {
+		return fmt.Errorf("failed to mark urls deleted: %w", err)
+	}
+
+	return nil
 }
 
 func (s *DBStore) Ping(ctx context.Context) error {

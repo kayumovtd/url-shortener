@@ -13,12 +13,17 @@ import (
 )
 
 type ShortenerService struct {
-	store   repository.Store
-	baseURL string
+	store        repository.Store
+	baseURL      string
+	batchDeleter *BatchDeleter
 }
 
 func NewShortenerService(store repository.Store, baseURL string) *ShortenerService {
-	return &ShortenerService{store: store, baseURL: baseURL}
+	return &ShortenerService{
+		store:        store,
+		baseURL:      baseURL,
+		batchDeleter: NewBatchDeleter(store),
+	}
 }
 
 func (s *ShortenerService) Shorten(ctx context.Context, originalURL string, userID string) (string, error) {
@@ -91,17 +96,17 @@ func (s *ShortenerService) ShortenBatch(
 	return responses, nil
 }
 
-func (s *ShortenerService) Unshorten(ctx context.Context, id string) (string, error) {
+func (s *ShortenerService) Unshorten(ctx context.Context, id string) (model.URLRecord, error) {
 	if id == "" {
-		return "", fmt.Errorf("empty id")
+		return model.URLRecord{}, fmt.Errorf("empty id")
 	}
 
 	rec, err := s.store.GetURL(ctx, id)
 	if err != nil {
-		return "", fmt.Errorf("not found: %w", err)
+		return model.URLRecord{}, fmt.Errorf("not found: %w", err)
 	}
 
-	return rec.OriginalURL, nil
+	return rec, nil
 }
 
 func (s *ShortenerService) Ping(ctx context.Context) error {
@@ -138,4 +143,12 @@ func (s *ShortenerService) normalizeURL(originalURL string) (string, error) {
 
 func (s *ShortenerService) makeResultURL(shortID string) string {
 	return fmt.Sprintf("%s/%s", s.baseURL, shortID)
+}
+
+func (s *ShortenerService) EnqueueDeletion(userID string, shortIDs []string) {
+	s.batchDeleter.Enqueue(userID, shortIDs)
+}
+
+func (s *ShortenerService) Close() {
+	s.batchDeleter.Close()
 }

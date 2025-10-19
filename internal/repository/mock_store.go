@@ -70,6 +70,18 @@ func (f *MockStore) GetUserURLs(ctx context.Context, userID string) ([]model.URL
 	return urls, nil
 }
 
+func (f *MockStore) MarkURLsDeleted(ctx context.Context, userID string, shortURLs []string) error {
+	for i, rec := range f.Data {
+		for _, shortURL := range shortURLs {
+			if rec.UserID == userID && rec.ShortURL == shortURL {
+				f.Data[i].IsDeleted = true
+			}
+		}
+	}
+
+	return nil
+}
+
 func (f *MockStore) Ping(ctx context.Context) error {
 	return nil
 }

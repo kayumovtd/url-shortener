@@ -32,6 +32,8 @@ func main() {
 	}
 
 	svc := service.NewShortenerService(store, cfg.BaseURL)
+	defer svc.Close()
+
 	auth := service.NewAuthService(cfg.AuthSecret)
 	r := handler.NewRouter(svc, auth, l)
 

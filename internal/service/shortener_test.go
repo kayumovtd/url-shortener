@@ -132,7 +132,7 @@ func TestUnshorten(t *testing.T) {
 
 			if tt.shouldErr {
 				if err == nil {
-					t.Errorf("expected error, got nil (result=%q)", got)
+					t.Errorf("expected error, got nil (result=%q)", got.OriginalURL)
 				}
 				return
 			}
@@ -140,8 +140,8 @@ func TestUnshorten(t *testing.T) {
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
-			if got != tt.want {
-				t.Errorf("expected %q, got %q", tt.want, got)
+			if got.OriginalURL != tt.want {
+				t.Errorf("expected %q, got %q", tt.want, got.OriginalURL)
 			}
 		})
 	}

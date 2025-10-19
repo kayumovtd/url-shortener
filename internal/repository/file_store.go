@@ -81,6 +81,21 @@ func (s *FileStore) GetUserURLs(ctx context.Context, userID string) ([]model.URL
 	return urls, nil
 }
 
+func (s *FileStore) MarkURLsDeleted(ctx context.Context, userID string, shortURLs []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, rec := range s.records {
+		for _, shortURL := range shortURLs {
+			if rec.UserID == userID && rec.ShortURL == shortURL {
+				s.records[i].IsDeleted = true
+			}
+		}
+	}
+
+	return s.save()
+}
+
 func (s *FileStore) save() error {
 	data, err := json.MarshalIndent(s.records, "", "  ")
 	if err != nil {

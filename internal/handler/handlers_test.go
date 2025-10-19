@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kayumovtd/url-shortener/internal/model"
 	"github.com/kayumovtd/url-shortener/internal/repository"
 	"github.com/kayumovtd/url-shortener/internal/service"
 	"github.com/kayumovtd/url-shortener/internal/service/mocks"
@@ -119,10 +120,17 @@ func TestGetHandler(t *testing.T) {
 	}{
 		{
 			name: "existing_id",
-			id:   "abc123",
+			id:   "abc1",
 			want: want{
 				statusCode: http.StatusTemporaryRedirect,
-				location:   "https://example.com",
+				location:   "https://example1.com",
+			},
+		},
+		{
+			name: "deleted_id",
+			id:   "abc2",
+			want: want{
+				statusCode: http.StatusGone,
 			},
 		},
 		{
@@ -143,8 +151,11 @@ func TestGetHandler(t *testing.T) {
 		},
 	}
 
-	store := repository.NewInMemoryStore()
-	store.SaveURL(t.Context(), "abc123", "https://example.com", testUserID)
+	store := repository.NewMockStore()
+	store.Data = []model.URLRecord{
+		{ShortURL: "abc1", OriginalURL: "https://example1.com", UserID: testUserID, IsDeleted: false},
+		{ShortURL: "abc2", OriginalURL: "https://example2.com", UserID: testUserID, IsDeleted: true},
+	}
 
 	svc := service.NewShortenerService(store, testBaseURL)
 	handler := GetHandler(svc)

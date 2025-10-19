@@ -11,6 +11,7 @@ type Store interface {
 	SaveURLs(ctx context.Context, urls map[string]string, userID string) error
 	GetURL(ctx context.Context, shortURL string) (model.URLRecord, error)
 	GetUserURLs(ctx context.Context, userID string) ([]model.URLRecord, error)
+	MarkURLsDeleted(ctx context.Context, userID string, shortURLs []string) error
 	Ping(ctx context.Context) error
 	Close()
 }

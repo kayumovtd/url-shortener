@@ -43,12 +43,16 @@ func PostHandler(svc *service.ShortenerService, up service.UserProvider) http.Ha
 func GetHandler(svc *service.ShortenerService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := chi.URLParam(r, "id")
-		origURL, err := svc.Unshorten(r.Context(), id)
+		rec, err := svc.Unshorten(r.Context(), id)
 		if err != nil {
 			utils.WritePlainText(w, http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
 			return
 		}
-		http.Redirect(w, r, origURL, http.StatusTemporaryRedirect)
+		if rec.IsDeleted {
+			utils.WritePlainText(w, http.StatusGone, http.StatusText(http.StatusGone))
+			return
+		}
+		http.Redirect(w, r, rec.OriginalURL, http.StatusTemporaryRedirect)
 	}
 }
 

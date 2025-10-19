@@ -77,6 +77,21 @@ func (s *InMemoryStore) GetUserURLs(ctx context.Context, userID string) ([]model
 	return urls, nil
 }
 
+func (s *InMemoryStore) MarkURLsDeleted(ctx context.Context, userID string, shortURLs []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, rec := range s.records {
+		for _, shortURL := range shortURLs {
+			if rec.UserID == userID && rec.ShortURL == shortURL {
+				s.records[i].IsDeleted = true
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *InMemoryStore) Ping(ctx context.Context) error {
 	return nil
 }
