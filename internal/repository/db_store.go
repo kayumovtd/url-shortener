@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/kayumovtd/url-shortener/internal/model"
 	"github.com/kayumovtd/url-shortener/migrations"
 )
 
@@ -17,15 +18,15 @@ type DBStore struct {
 	pool *pgxpool.Pool
 }
 
-func (s *DBStore) SaveURL(ctx context.Context, shortURL, originalURL string) error {
+func (s *DBStore) SaveURL(ctx context.Context, shortURL, originalURL string, userID string) error {
 	query := `
-		INSERT INTO urls (short_url, original_url)
-		VALUES ($1, $2)
+		INSERT INTO urls (short_url, original_url, user_id)
+		VALUES ($1, $2, $3)
 		RETURNING short_url;
 	`
 
 	var result string
-	err := s.pool.QueryRow(ctx, query, shortURL, originalURL).Scan(&result)
+	err := s.pool.QueryRow(ctx, query, shortURL, originalURL, userID).Scan(&result)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -37,7 +38,7 @@ func (s *DBStore) SaveURL(ctx context.Context, shortURL, originalURL string) err
 	return nil
 }
 
-func (s *DBStore) SaveURLs(ctx context.Context, urls map[string]string) error {
+func (s *DBStore) SaveURLs(ctx context.Context, urls map[string]string, userID string) error {
 	if len(urls) == 0 {
 		return nil
 	}
@@ -56,10 +57,10 @@ func (s *DBStore) SaveURLs(ctx context.Context, urls map[string]string) error {
 
 	for short, orig := range urls {
 		batch.Queue(
-			`INSERT INTO urls (short_url, original_url)
-			 VALUES ($1, $2) 
+			`INSERT INTO urls (short_url, original_url, user_id)
+			 VALUES ($1, $2, $3) 
 		 	 ON CONFLICT (short_url) DO UPDATE SET original_url = EXCLUDED.original_url`,
-			short, orig,
+			short, orig, userID,
 		)
 		count++
 
@@ -89,20 +90,52 @@ func (s *DBStore) SaveURLs(ctx context.Context, urls map[string]string) error {
 	return nil
 }
 
-func (s *DBStore) GetURL(ctx context.Context, shortURL string) (string, error) {
-	var original string
+func (s *DBStore) GetURL(ctx context.Context, shortURL string) (model.URLRecord, error) {
+	var result model.URLRecord
 	err := s.pool.QueryRow(ctx,
-		`SELECT original_url FROM urls WHERE short_url = $1`,
+		`SELECT id, user_id, short_url, original_url FROM urls WHERE short_url = $1`,
 		shortURL,
-	).Scan(&original)
+	).Scan(
+		&result.ID,
+		&result.UserID,
+		&result.ShortURL,
+		&result.OriginalURL,
+	)
 
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-		return "", fmt.Errorf("request canceled or timed out: %w", err)
+		return model.URLRecord{}, fmt.Errorf("request canceled or timed out: %w", err)
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to get original url: %w", err)
+		return model.URLRecord{}, fmt.Errorf("failed to get original url: %w", err)
 	}
-	return original, nil
+	return result, nil
+}
+
+func (s *DBStore) GetUserURLs(ctx context.Context, userID string) ([]model.URLRecord, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, short_url, original_url FROM urls WHERE user_id = $1`,
+		userID,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query user urls: %w", err)
+	}
+	defer rows.Close()
+
+	urls := []model.URLRecord{}
+	for rows.Next() {
+		var record model.URLRecord
+		if err := rows.Scan(&record.ID, &record.ShortURL, &record.OriginalURL); err != nil {
+			return nil, fmt.Errorf("failed to scan row: %w", err)
+		}
+		urls = append(urls, record)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("row iteration error: %w", err)
+	}
+
+	return urls, nil
 }
 
 func (s *DBStore) Ping(ctx context.Context) error {

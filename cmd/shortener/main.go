@@ -32,7 +32,8 @@ func main() {
 	}
 
 	svc := service.NewShortenerService(store, cfg.BaseURL)
-	r := handler.NewRouter(svc, l)
+	auth := service.NewAuthService(cfg.AuthSecret)
+	r := handler.NewRouter(svc, auth, l)
 
 	l.Info("starting server",
 		zap.String("address", cfg.Address),

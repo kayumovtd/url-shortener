@@ -21,7 +21,7 @@ func NewShortenerService(store repository.Store, baseURL string) *ShortenerServi
 	return &ShortenerService{store: store, baseURL: baseURL}
 }
 
-func (s *ShortenerService) Shorten(ctx context.Context, originalURL string) (string, error) {
+func (s *ShortenerService) Shorten(ctx context.Context, originalURL string, userID string) (string, error) {
 	url, err := s.normalizeURL(originalURL)
 	if err != nil {
 		return "", err
@@ -29,7 +29,7 @@ func (s *ShortenerService) Shorten(ctx context.Context, originalURL string) (str
 
 	shortID := utils.GenerateID(url)
 
-	if err := s.store.SaveURL(ctx, shortID, url); err != nil {
+	if err := s.store.SaveURL(ctx, shortID, url, userID); err != nil {
 		var conflict *repository.ErrStoreConflict
 		if errors.As(err, &conflict) {
 			return "", NewErrShortenerConflict(s.makeResultURL(conflict.ShortURL), err)
@@ -43,6 +43,7 @@ func (s *ShortenerService) Shorten(ctx context.Context, originalURL string) (str
 func (s *ShortenerService) ShortenBatch(
 	ctx context.Context,
 	items []model.ShortenBatchRequestItem,
+	userID string,
 ) ([]model.ShortenBatchResponseItem, error) {
 	if len(items) == 0 {
 		return nil, fmt.Errorf("empty batch")
@@ -83,7 +84,7 @@ func (s *ShortenerService) ShortenBatch(
 		return nil, errors.Join(errs...)
 	}
 
-	if err := s.store.SaveURLs(ctx, pairs); err != nil {
+	if err := s.store.SaveURLs(ctx, pairs, userID); err != nil {
 		return nil, fmt.Errorf("failed to save batch: %w", err)
 	}
 
@@ -95,16 +96,33 @@ func (s *ShortenerService) Unshorten(ctx context.Context, id string) (string, er
 		return "", fmt.Errorf("empty id")
 	}
 
-	orig, err := s.store.GetURL(ctx, id)
+	rec, err := s.store.GetURL(ctx, id)
 	if err != nil {
 		return "", fmt.Errorf("not found: %w", err)
 	}
 
-	return orig, nil
+	return rec.OriginalURL, nil
 }
 
 func (s *ShortenerService) Ping(ctx context.Context) error {
 	return s.store.Ping(ctx)
+}
+
+func (s *ShortenerService) GetUserURLs(ctx context.Context, userID string) ([]model.UserURLsResponseItem, error) {
+	urls, err := s.store.GetUserURLs(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user URLs: %w", err)
+	}
+
+	response := make([]model.UserURLsResponseItem, 0, len(urls))
+	for _, rec := range urls {
+		response = append(response, model.UserURLsResponseItem{
+			ShortURL:    s.makeResultURL(rec.ShortURL),
+			OriginalURL: rec.OriginalURL,
+		})
+	}
+
+	return response, nil
 }
 
 func (s *ShortenerService) normalizeURL(originalURL string) (string, error) {

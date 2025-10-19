@@ -1,7 +1,8 @@
 package model
 
 type URLRecord struct {
-	UUID        string `json:"uuid"`
+	ID          string `json:"id"`
+	UserID      string `json:"user_id"`
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
 }

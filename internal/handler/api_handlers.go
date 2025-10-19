@@ -1,0 +1,92 @@
+package handler
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+
+	"github.com/kayumovtd/url-shortener/internal/model"
+	"github.com/kayumovtd/url-shortener/internal/service"
+	"github.com/kayumovtd/url-shortener/internal/utils"
+)
+
+func ShortenHandler(svc *service.ShortenerService, up service.UserProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req model.ShortenRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.WriteJSONError(w, http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+			return
+		}
+
+		userID, ok := up.GetUserID(r.Context())
+		if !ok || userID == "" {
+			utils.WriteJSONError(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+			return
+		}
+
+		shortURL, err := svc.Shorten(r.Context(), req.URL, userID)
+		if err != nil {
+			var conflict *service.ErrShortenerConflict
+			if errors.As(err, &conflict) {
+				resp := model.ShortenResponse{Result: conflict.ResultURL}
+				utils.WriteJSON(w, http.StatusConflict, resp)
+				return
+			}
+			utils.WriteJSONError(w, http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+			return
+		}
+
+		resp := model.ShortenResponse{Result: shortURL}
+		utils.WriteJSON(w, http.StatusCreated, resp)
+	}
+}
+
+func ShortenBatchHandler(svc *service.ShortenerService, auth service.UserProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req []model.ShortenBatchRequestItem
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			utils.WriteJSONError(w, http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+			return
+		}
+
+		userID, ok := auth.GetUserID(r.Context())
+		if !ok || userID == "" {
+			utils.WriteJSONError(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+			return
+		}
+
+		resp, err := svc.ShortenBatch(r.Context(), req, userID)
+		if err != nil {
+			// Тут может быть как ошибка валидации урлов (bad request),
+			// так и ошибка сохранения в стор (internal server error).
+			// Можно в будущем добавить более детальную обработку ошибок, пока просто отдаём 400.
+			utils.WriteJSONError(w, http.StatusBadRequest, http.StatusText(http.StatusBadRequest))
+			return
+		}
+
+		utils.WriteJSON(w, http.StatusCreated, resp)
+	}
+}
+
+func GetUserURLsHandler(svc *service.ShortenerService, up service.UserProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := up.GetUserID(r.Context())
+		if !ok || userID == "" {
+			utils.WriteJSONError(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+			return
+		}
+
+		urls, err := svc.GetUserURLs(r.Context(), userID)
+		if err != nil {
+			utils.WriteJSONError(w, http.StatusInternalServerError, "failed to get user URLs")
+			return
+		}
+
+		if len(urls) == 0 {
+			utils.WriteJSONError(w, http.StatusNoContent, http.StatusText(http.StatusNoContent))
+			return
+		}
+
+		utils.WriteJSON(w, http.StatusOK, urls)
+	}
+}

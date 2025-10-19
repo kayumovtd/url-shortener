@@ -11,11 +11,13 @@ const (
 	defaultLogLevel        = "info"
 	defaultFileStoragePath = "storage.json"
 	defaultDatabaseDSN     = ""
+	defaultAuthSecret      = "" // оповещать, если не установлен?
 
 	envServerAddr      = "SERVER_ADDRESS"
 	envBaseURL         = "BASE_URL"
 	envFileStoragePath = "FILE_STORAGE_PATH"
 	envDatabaseDSN     = "DATABASE_DSN"
+	envAuthSecret      = "AUTH_SECRET"
 )
 
 type Config struct {
@@ -24,10 +26,13 @@ type Config struct {
 	LogLevel        string
 	FileStoragePath string
 	DatabaseDSN     string
+	AuthSecret      string
 }
 
 func NewConfig() *Config {
-	cfg := &Config{}
+	cfg := &Config{
+		AuthSecret: defaultAuthSecret,
+	}
 
 	flag.StringVar(&cfg.Address, "a", defaultAddress, "HTTP server listen address")
 	flag.StringVar(&cfg.BaseURL, "b", defaultBaseURL, "Base URL for shortened URLs")
@@ -47,6 +52,9 @@ func NewConfig() *Config {
 	}
 	if v, ok := os.LookupEnv(envDatabaseDSN); ok {
 		cfg.DatabaseDSN = v
+	}
+	if v, ok := os.LookupEnv(envAuthSecret); ok {
+		cfg.AuthSecret = v
 	}
 
 	return cfg

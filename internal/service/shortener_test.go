@@ -10,6 +10,7 @@ import (
 )
 
 const testBaseURL = "http://fooBar:8080"
+const testUserID = "test_user_id"
 
 func TestShorten(t *testing.T) {
 	tests := []struct {
@@ -28,7 +29,7 @@ func TestShorten(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := svc.Shorten(t.Context(), tt.input)
+			got, err := svc.Shorten(t.Context(), tt.input, testUserID)
 			if tt.shouldErr {
 				if err == nil {
 					t.Errorf("expected error, got nil (result=%q)", got)
@@ -80,7 +81,7 @@ func TestShortenBatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := svc.ShortenBatch(context.Background(), tt.input)
+			got, err := svc.ShortenBatch(context.Background(), tt.input, testUserID)
 
 			if tt.shouldErr {
 				if err == nil {
@@ -120,9 +121,10 @@ func TestUnshorten(t *testing.T) {
 	}
 
 	store := repository.NewMockStore()
+	store.Data = []model.URLRecord{
+		{ShortURL: "fooBar", OriginalURL: "https://example.com"},
+	}
 	svc := NewShortenerService(store, testBaseURL)
-
-	_ = store.SaveURL(t.Context(), "fooBar", "https://example.com")
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -145,13 +147,46 @@ func TestUnshorten(t *testing.T) {
 	}
 }
 
+func TestGetUserURLs(t *testing.T) {
+	tests := []struct {
+		name     string
+		userID   string
+		wantURLs bool
+	}{
+		{"has_urls", testUserID, true},
+		{"has_no_urls", "some_other_user", false},
+	}
+
+	store := repository.NewMockStore()
+	store.Data = []model.URLRecord{
+		{ShortURL: "fooBar1", OriginalURL: "https://example.com", UserID: testUserID},
+		{ShortURL: "fooBar2", OriginalURL: "https://example.com", UserID: testUserID},
+	}
+	svc := NewShortenerService(store, testBaseURL)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := svc.GetUserURLs(t.Context(), tt.userID)
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			hasURLs := len(got) > 0
+			if hasURLs != tt.wantURLs {
+				t.Errorf("expected %v, got %v", tt.wantURLs, hasURLs)
+			}
+		})
+	}
+}
+
 func TestShorten_StoreError(t *testing.T) {
 	store := repository.NewMockStore()
 	store.ErrorType = repository.SomeError
 
 	svc := NewShortenerService(store, testBaseURL)
 
-	_, err := svc.Shorten(t.Context(), "https://example.com")
+	_, err := svc.Shorten(t.Context(), "https://example.com", testUserID)
 	if err == nil {
 		t.Errorf("expected store error, got nil")
 	}
@@ -163,7 +198,7 @@ func TestShorten_ConflictStoreError(t *testing.T) {
 
 	svc := NewShortenerService(store, testBaseURL)
 
-	_, err := svc.Shorten(t.Context(), "https://example.com")
+	_, err := svc.Shorten(t.Context(), "https://example.com", testUserID)
 	if err == nil {
 		t.Errorf("expected store error, got nil")
 	}

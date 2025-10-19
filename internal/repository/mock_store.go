@@ -3,7 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
-	"maps"
+
+	"github.com/kayumovtd/url-shortener/internal/model"
 )
 
 type MockErrorType int
@@ -16,15 +17,15 @@ const (
 
 // TODO: Заюзать gomock
 type MockStore struct {
-	Data      map[string]string
+	Data      []model.URLRecord
 	ErrorType MockErrorType
 }
 
 func NewMockStore() *MockStore {
-	return &MockStore{Data: make(map[string]string)}
+	return &MockStore{}
 }
 
-func (f *MockStore) SaveURL(ctx context.Context, shortURL, originalURL string) error {
+func (f *MockStore) SaveURL(ctx context.Context, shortURL, originalURL, userID string) error {
 	switch f.ErrorType {
 	case NoError:
 		// continue
@@ -33,12 +34,10 @@ func (f *MockStore) SaveURL(ctx context.Context, shortURL, originalURL string) e
 	case ConflictError:
 		return NewErrStoreConflict(shortURL, originalURL, errors.New("conflict"))
 	}
-
-	f.Data[shortURL] = originalURL
 	return nil
 }
 
-func (f *MockStore) SaveURLs(ctx context.Context, urls map[string]string) error {
+func (f *MockStore) SaveURLs(ctx context.Context, urls map[string]string, userID string) error {
 	switch f.ErrorType {
 	case NoError:
 		// continue
@@ -47,16 +46,28 @@ func (f *MockStore) SaveURLs(ctx context.Context, urls map[string]string) error 
 	case ConflictError:
 		return NewErrStoreConflict("", "", errors.New("conflict"))
 	}
-	maps.Copy(f.Data, urls)
 	return nil
 }
 
-func (f *MockStore) GetURL(ctx context.Context, shortURL string) (string, error) {
-	val, ok := f.Data[shortURL]
-	if !ok {
-		return "", errors.New("not found")
+func (f *MockStore) GetURL(ctx context.Context, shortURL string) (model.URLRecord, error) {
+	for _, rec := range f.Data {
+		if rec.ShortURL == shortURL {
+			return rec, nil
+		}
 	}
-	return val, nil
+
+	return model.URLRecord{}, errors.New("key not found")
+}
+
+func (f *MockStore) GetUserURLs(ctx context.Context, userID string) ([]model.URLRecord, error) {
+	urls := []model.URLRecord{}
+	for _, rec := range f.Data {
+		if rec.UserID == userID {
+			urls = append(urls, rec)
+		}
+	}
+
+	return urls, nil
 }
 
 func (f *MockStore) Ping(ctx context.Context) error {
