@@ -18,9 +18,8 @@ func ShortenHandler(svc *service.ShortenerService, up service.UserProvider) http
 			return
 		}
 
-		userID, ok := up.GetUserID(r.Context())
-		if !ok || userID == "" {
-			utils.WriteJSONError(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+		userID, ok := RequireUserID(w, r, up)
+		if !ok {
 			return
 		}
 
@@ -41,7 +40,7 @@ func ShortenHandler(svc *service.ShortenerService, up service.UserProvider) http
 	}
 }
 
-func ShortenBatchHandler(svc *service.ShortenerService, auth service.UserProvider) http.HandlerFunc {
+func ShortenBatchHandler(svc *service.ShortenerService, up service.UserProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req []model.ShortenBatchRequestItem
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -49,9 +48,8 @@ func ShortenBatchHandler(svc *service.ShortenerService, auth service.UserProvide
 			return
 		}
 
-		userID, ok := auth.GetUserID(r.Context())
-		if !ok || userID == "" {
-			utils.WriteJSONError(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+		userID, ok := RequireUserID(w, r, up)
+		if !ok {
 			return
 		}
 
@@ -70,9 +68,8 @@ func ShortenBatchHandler(svc *service.ShortenerService, auth service.UserProvide
 
 func GetUserURLsHandler(svc *service.ShortenerService, up service.UserProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := up.GetUserID(r.Context())
-		if !ok || userID == "" {
-			utils.WriteJSONError(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+		userID, ok := RequireUserID(w, r, up)
+		if !ok {
 			return
 		}
 
@@ -93,9 +90,8 @@ func GetUserURLsHandler(svc *service.ShortenerService, up service.UserProvider) 
 
 func DeleteUserURLsHandler(svc *service.ShortenerService, up service.UserProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID, ok := up.GetUserID(r.Context())
-		if !ok || userID == "" {
-			utils.WriteJSONError(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+		userID, ok := RequireUserID(w, r, up)
+		if !ok {
 			return
 		}
 

@@ -18,11 +18,11 @@ type ShortenerService struct {
 	batchDeleter *BatchDeleter
 }
 
-func NewShortenerService(store repository.Store, baseURL string) *ShortenerService {
+func NewShortenerService(store repository.Store, baseURL string, batchDeleter *BatchDeleter) *ShortenerService {
 	return &ShortenerService{
 		store:        store,
 		baseURL:      baseURL,
-		batchDeleter: NewBatchDeleter(store),
+		batchDeleter: batchDeleter,
 	}
 }
 
@@ -147,8 +147,4 @@ func (s *ShortenerService) makeResultURL(shortID string) string {
 
 func (s *ShortenerService) EnqueueDeletion(userID string, shortIDs []string) {
 	s.batchDeleter.Enqueue(userID, shortIDs)
-}
-
-func (s *ShortenerService) Close() {
-	s.batchDeleter.Close()
 }

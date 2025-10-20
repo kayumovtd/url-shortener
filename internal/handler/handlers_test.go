@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kayumovtd/url-shortener/internal/logger"
 	"github.com/kayumovtd/url-shortener/internal/model"
 	"github.com/kayumovtd/url-shortener/internal/repository"
 	"github.com/kayumovtd/url-shortener/internal/service"
@@ -74,7 +75,9 @@ func TestPostHandler(t *testing.T) {
 	store := repository.NewInMemoryStore()
 	store.SaveURL(t.Context(), existingShort, existingURL, testUserID)
 
-	svc := service.NewShortenerService(store, testBaseURL)
+	bd := service.NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := service.NewShortenerService(store, testBaseURL, bd)
 	up := mocks.NewMockUserProvider(testUserID, true)
 	handler := PostHandler(svc, up)
 
@@ -157,7 +160,9 @@ func TestGetHandler(t *testing.T) {
 		{ShortURL: "abc2", OriginalURL: "https://example2.com", UserID: testUserID, IsDeleted: true},
 	}
 
-	svc := service.NewShortenerService(store, testBaseURL)
+	bd := service.NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := service.NewShortenerService(store, testBaseURL, bd)
 	handler := GetHandler(svc)
 
 	for _, tt := range tests {

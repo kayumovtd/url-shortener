@@ -2,9 +2,12 @@ package service
 
 import (
 	"context"
+	"sync"
 	"time"
 
+	"github.com/kayumovtd/url-shortener/internal/logger"
 	"github.com/kayumovtd/url-shortener/internal/repository"
+	"go.uber.org/zap"
 )
 
 type DeleteTask struct {
@@ -13,35 +16,105 @@ type DeleteTask struct {
 }
 
 type BatchDeleter struct {
-	store         repository.Store
-	inputCh       chan DeleteTask
-	doneCh        chan struct{}
+	store repository.Store
+	log   *logger.Logger
+
+	doneCh       chan struct{}
+	inputCh      chan DeleteTask
+	aggregatorCh <-chan DeleteTask
+
 	batchSize     int
 	flushInterval time.Duration
+	timeout       time.Duration
 }
 
-func NewBatchDeleter(store repository.Store) *BatchDeleter {
+func NewBatchDeleter(store repository.Store, log *logger.Logger) *BatchDeleter {
 	h := &BatchDeleter{
 		store:         store,
-		inputCh:       make(chan DeleteTask, 1000),
+		log:           log,
 		doneCh:        make(chan struct{}),
+		inputCh:       make(chan DeleteTask, 1000),
 		batchSize:     100,
 		flushInterval: 2 * time.Second,
+		timeout:       3 * time.Second,
 	}
 
-	go h.runAggregator()
+	workers := h.fanOut(h.inputCh)
+	h.aggregatorCh = h.fanIn(workers...)
+	go h.runAggregator(h.aggregatorCh)
 
 	return h
 }
 
-func (h *BatchDeleter) runAggregator() {
+func (h *BatchDeleter) fanOut(input <-chan DeleteTask) []chan DeleteTask {
+	workerCount := 5
+	workers := make([]chan DeleteTask, workerCount)
+	for i := range workerCount {
+		workers[i] = make(chan DeleteTask, 100)
+	}
+
+	go func() {
+		defer func() {
+			for _, ch := range workers {
+				close(ch)
+			}
+		}()
+
+		// Раскидываем таски воркерам по кругу
+		i := 0
+		for task := range input {
+			select {
+			case <-h.doneCh:
+				return
+			case workers[i] <- task:
+				i = (i + 1) % workerCount
+			}
+		}
+	}()
+
+	return workers
+}
+
+func (h *BatchDeleter) fanIn(inputs ...chan DeleteTask) <-chan DeleteTask {
+	finalCh := make(chan DeleteTask)
+
+	var wg sync.WaitGroup
+
+	for _, ch := range inputs {
+		chClosure := ch
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for data := range chClosure {
+				select {
+				case <-h.doneCh:
+					return
+				case finalCh <- data:
+				}
+			}
+		}()
+	}
+
+	go func() {
+		wg.Wait()
+		close(finalCh)
+	}()
+
+	return finalCh
+}
+
+func (h *BatchDeleter) runAggregator(input <-chan DeleteTask) {
 	batch := make([]DeleteTask, 0, h.batchSize)
+
 	ticker := time.NewTicker(h.flushInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case task := <-h.inputCh:
+		case task := <-input:
 			batch = append(batch, task)
 			if len(batch) >= h.batchSize {
 				h.flush(batch)
@@ -64,13 +137,22 @@ func (h *BatchDeleter) runAggregator() {
 }
 
 func (h *BatchDeleter) flush(batch []DeleteTask) {
+	ctx, cancel := context.WithTimeout(context.Background(), h.timeout)
+	defer cancel()
+
 	userURLs := make(map[string][]string)
 	for _, t := range batch {
 		userURLs[t.UserID] = append(userURLs[t.UserID], t.ShortIDs...)
 	}
 
 	for userID, ids := range userURLs {
-		_ = h.store.MarkURLsDeleted(context.Background(), userID, ids)
+		if err := h.store.MarkURLsDeleted(ctx, userID, ids); err != nil {
+			h.log.Error("failed to mark urls deleted",
+				zap.String("userID", userID),
+				zap.Strings("ids", ids),
+				zap.Error(err),
+			)
+		}
 	}
 }
 
@@ -79,6 +161,7 @@ func (h *BatchDeleter) Enqueue(userID string, shortIDs []string) {
 }
 
 func (h *BatchDeleter) Close() {
+	close(h.doneCh)
 	close(h.inputCh)
 }
 

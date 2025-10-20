@@ -38,11 +38,6 @@ func AuthMiddleware(auth *service.AuthService) func(http.Handler) http.Handler {
 					Secure:   false, // true — если HTTPS
 					Expires:  time.Now().Add(365 * 24 * time.Hour),
 				})
-			} else if userID == "" {
-				// По заданию:
-				// Если кука присутствует в запросе, но не содержит ID пользователя, хендлер должен возвращать HTTP-статус 401 Unauthorized.
-				http.Error(w, "invalid token: empty userID", http.StatusUnauthorized)
-				return
 			}
 
 			ctx := auth.WithUserID(r.Context(), userID)

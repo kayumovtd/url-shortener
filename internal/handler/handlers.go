@@ -19,9 +19,8 @@ func PostHandler(svc *service.ShortenerService, up service.UserProvider) http.Ha
 			return
 		}
 
-		userID, ok := up.GetUserID(r.Context())
-		if !ok || userID == "" {
-			utils.WritePlainText(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized))
+		userID, ok := RequireUserID(w, r, up)
+		if !ok {
 			return
 		}
 

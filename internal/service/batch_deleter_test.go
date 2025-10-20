@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kayumovtd/url-shortener/internal/logger"
 	"github.com/kayumovtd/url-shortener/internal/model"
 	"github.com/kayumovtd/url-shortener/internal/repository"
 )
@@ -16,7 +17,7 @@ func TestBatchDeleter_FlushOnBatchSize(t *testing.T) {
 		{ShortURL: "c", UserID: "user1", IsDeleted: false},
 	}
 
-	deleter := NewBatchDeleter(mockStore)
+	deleter := NewBatchDeleter(mockStore, logger.NewNoOp())
 	defer deleter.Close()
 
 	deleter.SetBatchSize(3)
@@ -49,7 +50,7 @@ func TestBatchDeleter_FlushOnTimer(t *testing.T) {
 		{ShortURL: "c", UserID: "user1", IsDeleted: false},
 	}
 
-	deleter := NewBatchDeleter(mockStore)
+	deleter := NewBatchDeleter(mockStore, logger.NewNoOp())
 	defer deleter.Close()
 
 	deleter.SetBatchSize(100) // Чтобы не сработал батч

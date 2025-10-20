@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/kayumovtd/url-shortener/internal/logger"
 	"github.com/kayumovtd/url-shortener/internal/model"
 	"github.com/kayumovtd/url-shortener/internal/repository"
 	"github.com/kayumovtd/url-shortener/internal/service"
@@ -73,7 +74,9 @@ func TestShortenHandler(t *testing.T) {
 	store := repository.NewInMemoryStore()
 	store.SaveURL(t.Context(), existingShort, existingURL, testUserID)
 
-	svc := service.NewShortenerService(store, testBaseURL)
+	bd := service.NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := service.NewShortenerService(store, testBaseURL, bd)
 	up := mocks.NewMockUserProvider(testUserID, true)
 	handler := ShortenHandler(svc, up)
 
@@ -147,7 +150,9 @@ func TestGetUserURLsHandler(t *testing.T) {
 		{ShortURL: "fooBar1", OriginalURL: "https://example.com", UserID: testUserID},
 		{ShortURL: "fooBar2", OriginalURL: "https://example.com", UserID: testUserID},
 	}
-	svc := service.NewShortenerService(store, testBaseURL)
+	bd := service.NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := service.NewShortenerService(store, testBaseURL, bd)
 
 	for _, tt := range tests {
 		up := mocks.NewMockUserProvider(tt.userID, true)
@@ -178,7 +183,9 @@ func TestGetUserURLsHandler(t *testing.T) {
 
 func TestDeleteUserURLsHandler(t *testing.T) {
 	store := repository.NewMockStore()
-	svc := service.NewShortenerService(store, testBaseURL)
+	bd := service.NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := service.NewShortenerService(store, testBaseURL, bd)
 	up := mocks.NewMockUserProvider(testUserID, true)
 	handler := DeleteUserURLsHandler(svc, up)
 
