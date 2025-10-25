@@ -31,8 +31,13 @@ func main() {
 		l.Fatal("failed to create store", zap.Error(err))
 	}
 
-	svc := service.NewShortenerService(store, cfg.BaseURL)
-	r := handler.NewRouter(svc, l)
+	bd := service.NewBatchDeleter(store, l)
+	defer bd.Close()
+
+	svc := service.NewShortenerService(store, cfg.BaseURL, bd)
+
+	auth := service.NewAuthService(cfg.AuthSecret)
+	r := handler.NewRouter(svc, auth, l)
 
 	l.Info("starting server",
 		zap.String("address", cfg.Address),

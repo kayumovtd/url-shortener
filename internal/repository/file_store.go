@@ -4,72 +4,103 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"maps"
 	"os"
-	"strconv"
 	"sync"
 
+	"github.com/google/uuid"
 	"github.com/kayumovtd/url-shortener/internal/model"
 )
 
 type FileStore struct {
-	mu    *sync.Mutex
-	store map[string]string
-	path  string
+	mu      *sync.Mutex
+	records []model.URLRecord
+	path    string
 }
 
-func (s *FileStore) SaveURL(ctx context.Context, shortURL, originalURL string) error {
+func (s *FileStore) SaveURL(ctx context.Context, shortURL, originalURL, userID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	for existingShort, existingOriginal := range s.store {
-		if existingOriginal == originalURL {
-			return NewErrStoreConflict(existingShort, existingOriginal, nil)
+	for _, rec := range s.records {
+		if rec.OriginalURL == originalURL {
+			return NewErrStoreConflict(rec.ShortURL, rec.OriginalURL, nil)
 		}
 	}
 
-	s.store[shortURL] = originalURL
-	return s.save()
-}
-
-func (s *FileStore) SaveURLs(ctx context.Context, urls map[string]string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	maps.Copy(s.store, urls)
-	return s.save()
-}
-
-func (s *FileStore) GetURL(ctx context.Context, shortURL string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	val, ok := s.store[shortURL]
-	if !ok {
-		return "", errors.New("key not found")
+	record := model.URLRecord{
+		ID:          uuid.NewString(),
+		UserID:      userID,
+		ShortURL:    shortURL,
+		OriginalURL: originalURL,
 	}
-	return val, nil
+
+	s.records = append(s.records, record)
+	return s.save()
 }
 
-func (s *FileStore) save() error {
-	records := make([]model.URLRecord, 0, len(s.store))
-	i := 1
-	for short, original := range s.store {
-		records = append(records, model.URLRecord{
-			// Пока просто используем индекс, т.к. ни на что не влияет,
-			// потом можно заменить на UUID и хранить в сторе []URLRecord
-			UUID:        strconv.Itoa(i),
+func (s *FileStore) SaveURLs(ctx context.Context, urls map[string]string, userID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for short, original := range urls {
+		s.records = append(s.records, model.URLRecord{
+			ID:          uuid.NewString(),
+			UserID:      userID,
 			ShortURL:    short,
 			OriginalURL: original,
 		})
-		i++
 	}
 
-	data, err := json.MarshalIndent(records, "", "  ")
+	return s.save()
+}
+
+func (s *FileStore) GetURL(ctx context.Context, shortURL string) (model.URLRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, rec := range s.records {
+		if rec.ShortURL == shortURL {
+			return rec, nil
+		}
+	}
+
+	return model.URLRecord{}, errors.New("key not found")
+}
+
+func (s *FileStore) GetUserURLs(ctx context.Context, userID string) ([]model.URLRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	urls := []model.URLRecord{}
+	for _, rec := range s.records {
+		if rec.UserID == userID {
+			urls = append(urls, rec)
+		}
+	}
+
+	return urls, nil
+}
+
+func (s *FileStore) MarkURLsDeleted(ctx context.Context, userID string, shortURLs []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, rec := range s.records {
+		for _, shortURL := range shortURLs {
+			if rec.UserID == userID && rec.ShortURL == shortURL {
+				s.records[i].IsDeleted = true
+			}
+		}
+	}
+
+	return s.save()
+}
+
+func (s *FileStore) save() error {
+	data, err := json.MarshalIndent(s.records, "", "  ")
 	if err != nil {
 		return err
 	}
-
 	return os.WriteFile(s.path, data, 0644)
 }
 
@@ -81,9 +112,9 @@ func (s *FileStore) Close() {}
 
 func NewFileStore(path string) (*FileStore, error) {
 	fs := &FileStore{
-		mu:    &sync.Mutex{},
-		store: make(map[string]string),
-		path:  path,
+		mu:      &sync.Mutex{},
+		records: []model.URLRecord{},
+		path:    path,
 	}
 
 	if _, err := os.Stat(path); err == nil {
@@ -91,14 +122,9 @@ func NewFileStore(path string) (*FileStore, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		var records []model.URLRecord
 		if len(data) > 0 {
-			if err := json.Unmarshal(data, &records); err != nil {
+			if err := json.Unmarshal(data, &fs.records); err != nil {
 				return nil, err
-			}
-			for _, r := range records {
-				fs.store[r.ShortURL] = r.OriginalURL
 			}
 		}
 	}

@@ -27,6 +27,10 @@ func New(level string) (*Logger, error) {
 	return &Logger{zl}, nil
 }
 
+func NewNoOp() *Logger {
+	return &Logger{zap.NewNop()}
+}
+
 func (l *Logger) Sync() error {
 	return l.Logger.Sync()
 }

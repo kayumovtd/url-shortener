@@ -9,11 +9,15 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/kayumovtd/url-shortener/internal/logger"
+	"github.com/kayumovtd/url-shortener/internal/model"
 	"github.com/kayumovtd/url-shortener/internal/repository"
 	"github.com/kayumovtd/url-shortener/internal/service"
+	"github.com/kayumovtd/url-shortener/internal/service/mocks"
 )
 
 const testBaseURL = "http://fooBar:8080"
+const testUserID = "test_user_id"
 
 func TestPostHandler(t *testing.T) {
 	existingURL := "https://existing.com"
@@ -44,7 +48,7 @@ func TestPostHandler(t *testing.T) {
 			body: "",
 			want: want{
 				statusCode:  http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
+				contentType: "text/plain",
 				body:        http.StatusText(http.StatusBadRequest),
 			},
 		},
@@ -53,7 +57,7 @@ func TestPostHandler(t *testing.T) {
 			body: "fooBar",
 			want: want{
 				statusCode:  http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
+				contentType: "text/plain",
 				body:        http.StatusText(http.StatusBadRequest),
 			},
 		},
@@ -69,10 +73,13 @@ func TestPostHandler(t *testing.T) {
 	}
 
 	store := repository.NewInMemoryStore()
-	store.SaveURL(t.Context(), existingShort, existingURL)
+	store.SaveURL(t.Context(), existingShort, existingURL, testUserID)
 
-	svc := service.NewShortenerService(store, testBaseURL)
-	handler := PostHandler(svc)
+	bd := service.NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := service.NewShortenerService(store, testBaseURL, bd)
+	up := mocks.NewMockUserProvider(testUserID, true)
+	handler := PostHandler(svc, up)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -110,20 +117,23 @@ func TestGetHandler(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		id           string
-		prepareStore func(ctx context.Context, store repository.Store)
-		want         want
+		name string
+		id   string
+		want want
 	}{
 		{
 			name: "existing_id",
-			id:   "abc123",
-			prepareStore: func(ctx context.Context, store repository.Store) {
-				store.SaveURL(ctx, "abc123", "https://example.com")
-			},
+			id:   "abc1",
 			want: want{
 				statusCode: http.StatusTemporaryRedirect,
-				location:   "https://example.com",
+				location:   "https://example1.com",
+			},
+		},
+		{
+			name: "deleted_id",
+			id:   "abc2",
+			want: want{
+				statusCode: http.StatusGone,
 			},
 		},
 		{
@@ -144,14 +154,18 @@ func TestGetHandler(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		store := repository.NewInMemoryStore()
-		if tt.prepareStore != nil {
-			tt.prepareStore(t.Context(), store)
-		}
-		svc := service.NewShortenerService(store, testBaseURL)
-		handler := GetHandler(svc)
+	store := repository.NewMockStore()
+	store.Data = []model.URLRecord{
+		{ShortURL: "abc1", OriginalURL: "https://example1.com", UserID: testUserID, IsDeleted: false},
+		{ShortURL: "abc2", OriginalURL: "https://example2.com", UserID: testUserID, IsDeleted: true},
+	}
 
+	bd := service.NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := service.NewShortenerService(store, testBaseURL, bd)
+	handler := GetHandler(svc)
+
+	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			url := "/" + tt.id
 			req := httptest.NewRequest(http.MethodGet, url, nil)

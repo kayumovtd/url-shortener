@@ -5,11 +5,13 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/kayumovtd/url-shortener/internal/logger"
 	"github.com/kayumovtd/url-shortener/internal/model"
 	"github.com/kayumovtd/url-shortener/internal/repository"
 )
 
 const testBaseURL = "http://fooBar:8080"
+const testUserID = "test_user_id"
 
 func TestShorten(t *testing.T) {
 	tests := []struct {
@@ -24,11 +26,13 @@ func TestShorten(t *testing.T) {
 	}
 
 	store := repository.NewMockStore()
-	svc := NewShortenerService(store, testBaseURL)
+	bd := NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := NewShortenerService(store, testBaseURL, bd)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := svc.Shorten(t.Context(), tt.input)
+			got, err := svc.Shorten(t.Context(), tt.input, testUserID)
 			if tt.shouldErr {
 				if err == nil {
 					t.Errorf("expected error, got nil (result=%q)", got)
@@ -76,11 +80,13 @@ func TestShortenBatch(t *testing.T) {
 	}
 
 	store := repository.NewMockStore()
-	svc := NewShortenerService(store, testBaseURL)
+	bd := NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := NewShortenerService(store, testBaseURL, bd)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := svc.ShortenBatch(context.Background(), tt.input)
+			got, err := svc.ShortenBatch(context.Background(), tt.input, testUserID)
 
 			if tt.shouldErr {
 				if err == nil {
@@ -120,9 +126,12 @@ func TestUnshorten(t *testing.T) {
 	}
 
 	store := repository.NewMockStore()
-	svc := NewShortenerService(store, testBaseURL)
-
-	_ = store.SaveURL(t.Context(), "fooBar", "https://example.com")
+	store.Data = []model.URLRecord{
+		{ShortURL: "fooBar", OriginalURL: "https://example.com"},
+	}
+	bd := NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := NewShortenerService(store, testBaseURL, bd)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -130,7 +139,7 @@ func TestUnshorten(t *testing.T) {
 
 			if tt.shouldErr {
 				if err == nil {
-					t.Errorf("expected error, got nil (result=%q)", got)
+					t.Errorf("expected error, got nil (result=%q)", got.OriginalURL)
 				}
 				return
 			}
@@ -138,8 +147,43 @@ func TestUnshorten(t *testing.T) {
 			if err != nil {
 				t.Errorf("unexpected error: %v", err)
 			}
-			if got != tt.want {
-				t.Errorf("expected %q, got %q", tt.want, got)
+			if got.OriginalURL != tt.want {
+				t.Errorf("expected %q, got %q", tt.want, got.OriginalURL)
+			}
+		})
+	}
+}
+
+func TestGetUserURLs(t *testing.T) {
+	tests := []struct {
+		name     string
+		userID   string
+		wantURLs bool
+	}{
+		{"has_urls", testUserID, true},
+		{"has_no_urls", "some_other_user", false},
+	}
+
+	store := repository.NewMockStore()
+	store.Data = []model.URLRecord{
+		{ShortURL: "fooBar1", OriginalURL: "https://example.com", UserID: testUserID},
+		{ShortURL: "fooBar2", OriginalURL: "https://example.com", UserID: testUserID},
+	}
+	bd := NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := NewShortenerService(store, testBaseURL, bd)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := svc.GetUserURLs(t.Context(), tt.userID)
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+			}
+
+			hasURLs := len(got) > 0
+			if hasURLs != tt.wantURLs {
+				t.Errorf("expected %v, got %v", tt.wantURLs, hasURLs)
 			}
 		})
 	}
@@ -149,9 +193,11 @@ func TestShorten_StoreError(t *testing.T) {
 	store := repository.NewMockStore()
 	store.ErrorType = repository.SomeError
 
-	svc := NewShortenerService(store, testBaseURL)
+	bd := NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := NewShortenerService(store, testBaseURL, bd)
 
-	_, err := svc.Shorten(t.Context(), "https://example.com")
+	_, err := svc.Shorten(t.Context(), "https://example.com", testUserID)
 	if err == nil {
 		t.Errorf("expected store error, got nil")
 	}
@@ -161,9 +207,11 @@ func TestShorten_ConflictStoreError(t *testing.T) {
 	store := repository.NewMockStore()
 	store.ErrorType = repository.ConflictError
 
-	svc := NewShortenerService(store, testBaseURL)
+	bd := NewBatchDeleter(store, logger.NewNoOp())
+	defer bd.Close()
+	svc := NewShortenerService(store, testBaseURL, bd)
 
-	_, err := svc.Shorten(t.Context(), "https://example.com")
+	_, err := svc.Shorten(t.Context(), "https://example.com", testUserID)
 	if err == nil {
 		t.Errorf("expected store error, got nil")
 	}
